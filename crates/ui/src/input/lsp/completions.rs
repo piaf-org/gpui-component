@@ -199,8 +199,7 @@ impl InputState {
                     });
 
                     cx.notify();
-                })
-                .ok();
+                });
 
             Ok(())
         });
