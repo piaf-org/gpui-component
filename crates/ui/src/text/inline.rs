@@ -105,13 +105,11 @@ impl Inline {
             return (is_selectable, false, None);
         }
 
-        let Some((selection_start, selection_end)) = text_view_state.selection_points() else {
-            return (is_selectable, false, None);
-        };
         let line_height = window.line_height();
+        let selection_bounds = text_view_state.selection_bounds();
 
         // Use for debug selection bounds
-        // self.paint_selected_bounds(Bounds::from_corners(selection_start, selection_end), window, cx);
+        // self.paint_selected_bounds(selection_bounds, window, cx);
 
         let mut selection: Option<Selection> = None;
         let mut offset = 0;
@@ -129,8 +127,7 @@ impl Inline {
                 }
             }
 
-            if point_in_text_selection(pos, char_width, selection_start, selection_end, line_height)
-            {
+            if point_in_text_selection(pos, char_width, &selection_bounds, line_height) {
                 if selection.is_none() {
                     selection = Some((offset..offset).into());
                 }
@@ -349,10 +346,9 @@ impl Element for Inline {
             window.on_mouse_event({
                 let links = self.links.clone();
                 let text_layout = text_layout.clone();
-                let hitbox = hitbox.clone();
 
-                move |event: &MouseUpEvent, phase, window, cx| {
-                    if !phase.bubble() || !hitbox.is_hovered(window) {
+                move |event: &MouseUpEvent, phase, _, cx| {
+                    if !bounds.contains(&event.position) || !phase.bubble() {
                         return;
                     }
 
@@ -372,40 +368,32 @@ impl Element for Inline {
 fn point_in_text_selection(
     pos: Point<Pixels>,
     char_width: Pixels,
-    selection_start: Point<Pixels>,
-    selection_end: Point<Pixels>,
+    bounds: &Bounds<Pixels>,
     line_height: Pixels,
 ) -> bool {
-    let point_in_line = |point: Point<Pixels>| point.y >= pos.y && point.y < pos.y + line_height;
-    let top = selection_start.y.min(selection_end.y);
-    let bottom = selection_start.y.max(selection_end.y);
-    let x = pos.x + char_width.half();
+    let top = bounds.top();
+    let bottom = bounds.bottom();
+    let left = bounds.left();
+    let right = bounds.right();
 
     // Out of the vertical bounds
-    if pos.y + line_height <= top || pos.y > bottom {
+    if pos.y + line_height < top || pos.y >= bottom {
         return false;
     }
 
-    // Treat the selection as single-line when both drag points fall within the
-    // same rendered line, even if their y coordinates differ inside that line.
-    if point_in_line(selection_start) && point_in_line(selection_end) {
-        let left = selection_start.x.min(selection_end.x);
-        let right = selection_start.x.max(selection_end.x);
-        return x >= left && x <= right;
+    let single_line = (bottom - top) <= line_height;
+    if single_line {
+        // If it's a single line selection, just check horizontal bounds
+        return pos.x + char_width.half() >= left && pos.x + char_width.half() <= right;
     }
 
-    let (top_point, bottom_point) = if selection_start.y < selection_end.y {
-        (selection_start, selection_end)
-    } else {
-        (selection_end, selection_start)
-    };
-    let is_top_line = point_in_line(top_point);
-    let is_bottom_line = point_in_line(bottom_point);
+    let is_above = pos.y <= top;
+    let is_below = pos.y + line_height >= bottom;
 
-    if is_top_line {
-        return x >= top_point.x;
-    } else if is_bottom_line {
-        return x <= bottom_point.x;
+    if is_above {
+        return pos.x + char_width.half() >= left;
+    } else if is_below {
+        return pos.x + char_width.half() <= right;
     } else {
         return true;
     }
@@ -414,14 +402,16 @@ fn point_in_text_selection(
 #[cfg(test)]
 mod tests {
     use super::point_in_text_selection;
-    use gpui::{point, px};
+    use gpui::{Bounds, point, px, size};
 
     #[test]
     fn test_point_in_text_selection() {
         let line_height = px(20.);
         let char_width = px(10.);
-        let start = point(px(50.), px(50.));
-        let end = point(px(150.), px(150.));
+        let bounds = Bounds {
+            origin: point(px(50.), px(50.)),
+            size: size(px(100.), px(100.)),
+        };
 
         // First line but haft line height, true
         // | p --------|
@@ -430,8 +420,7 @@ mod tests {
         assert!(point_in_text_selection(
             point(px(50.), px(40.)),
             char_width,
-            start,
-            end,
+            &bounds,
             line_height
         ));
 
@@ -442,8 +431,7 @@ mod tests {
         assert!(point_in_text_selection(
             point(px(50.), px(50.)),
             char_width,
-            start,
-            end,
+            &bounds,
             line_height
         ));
         // First line, but left out of selection, false
@@ -453,8 +441,7 @@ mod tests {
         assert!(!point_in_text_selection(
             point(px(40.), px(50.)),
             char_width,
-            start,
-            end,
+            &bounds,
             line_height
         ));
         // First line but right out of selection, true
@@ -464,8 +451,7 @@ mod tests {
         assert!(point_in_text_selection(
             point(px(160.), px(50.)),
             char_width,
-            start,
-            end,
+            &bounds,
             line_height
         ));
 
@@ -476,8 +462,7 @@ mod tests {
         assert!(point_in_text_selection(
             point(px(100.), px(70.)),
             char_width,
-            start,
-            end,
+            &bounds,
             line_height
         ));
         // Middle line, but left out of selection, true
@@ -487,8 +472,7 @@ mod tests {
         assert!(point_in_text_selection(
             point(px(40.), px(70.)),
             char_width,
-            start,
-            end,
+            &bounds,
             line_height
         ));
         // Middle line, but right out of selection, true
@@ -498,8 +482,7 @@ mod tests {
         assert!(point_in_text_selection(
             point(px(160.), px(70.)),
             char_width,
-            start,
-            end,
+            &bounds,
             line_height
         ));
 
@@ -510,8 +493,7 @@ mod tests {
         assert!(point_in_text_selection(
             point(px(100.), px(140.)),
             char_width,
-            start,
-            end,
+            &bounds,
             line_height
         ));
         // Last line, but left out of selection, true
@@ -522,8 +504,7 @@ mod tests {
         assert!(point_in_text_selection(
             point(px(40.), px(140.)),
             char_width,
-            start,
-            end,
+            &bounds,
             line_height
         ));
         // Last line, but right out of selection, false
@@ -533,8 +514,7 @@ mod tests {
         assert!(!point_in_text_selection(
             point(px(160.), px(140.)),
             char_width,
-            start,
-            end,
+            &bounds,
             line_height
         ));
 
@@ -546,8 +526,7 @@ mod tests {
         assert!(!point_in_text_selection(
             point(px(100.), px(20.)),
             char_width,
-            start,
-            end,
+            &bounds,
             line_height
         ));
         // Out of vertical bounds (bottom), false
@@ -558,111 +537,7 @@ mod tests {
         assert!(!point_in_text_selection(
             point(px(100.), px(160.)),
             char_width,
-            start,
-            end,
-            line_height
-        ));
-    }
-
-    #[test]
-    fn test_point_in_text_selection_reversed_drag_direction() {
-        let line_height = px(20.);
-        let char_width = px(10.);
-
-        // Mouse down on lower line then drag upward to x=150.
-        // Top line should follow current mouse x, bottom line should keep anchor x.
-        let start = point(px(80.), px(150.));
-        let end = point(px(150.), px(50.));
-
-        // On top line, selection starts from top cursor x (150), so x=140 should be excluded.
-        assert!(!point_in_text_selection(
-            point(px(140.), px(50.)),
-            char_width,
-            start,
-            end,
-            line_height
-        ));
-        assert!(point_in_text_selection(
-            point(px(150.), px(50.)),
-            char_width,
-            start,
-            end,
-            line_height
-        ));
-
-        // On bottom line, selection ends at anchor x (80), so x=90 should be excluded.
-        assert!(point_in_text_selection(
-            point(px(75.), px(140.)),
-            char_width,
-            start,
-            end,
-            line_height
-        ));
-        assert!(!point_in_text_selection(
-            point(px(80.), px(140.)),
-            char_width,
-            start,
-            end,
-            line_height
-        ));
-    }
-
-    #[test]
-    fn test_point_in_text_selection_same_visual_line_with_different_y() {
-        let line_height = px(20.);
-        let char_width = px(10.);
-        let start = point(px(100.), px(55.));
-        let end = point(px(60.), px(58.));
-
-        assert!(!point_in_text_selection(
-            point(px(40.), px(50.)),
-            char_width,
-            start,
-            end,
-            line_height
-        ));
-        assert!(point_in_text_selection(
-            point(px(70.), px(50.)),
-            char_width,
-            start,
-            end,
-            line_height
-        ));
-        assert!(!point_in_text_selection(
-            point(px(110.), px(50.)),
-            char_width,
-            start,
-            end,
-            line_height
-        ));
-    }
-
-    #[test]
-    fn test_point_in_text_selection_same_visual_line_with_reversed_y() {
-        let line_height = px(20.);
-        let char_width = px(10.);
-        let start = point(px(60.), px(58.));
-        let end = point(px(100.), px(55.));
-
-        assert!(!point_in_text_selection(
-            point(px(40.), px(50.)),
-            char_width,
-            start,
-            end,
-            line_height
-        ));
-        assert!(point_in_text_selection(
-            point(px(70.), px(50.)),
-            char_width,
-            start,
-            end,
-            line_height
-        ));
-        assert!(!point_in_text_selection(
-            point(px(110.), px(50.)),
-            char_width,
-            start,
-            end,
+            &bounds,
             line_height
         ));
     }

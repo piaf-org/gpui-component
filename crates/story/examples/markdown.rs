@@ -7,7 +7,7 @@ use gpui_component::{
     highlighter::Language,
     input::{Input, InputEvent, InputState, TabSize},
     resizable::{h_resizable, resizable_panel},
-    text::markdown,
+    text::TextView,
 };
 use gpui_component_assets::Assets;
 use gpui_component_story::Open;
@@ -32,13 +32,6 @@ impl Example {
                 .searchable(true)
                 .placeholder("Enter your Markdown here...")
                 .default_value(EXAMPLE)
-        });
-
-        // Focus the input on startup so that actions (e.g. Open) can bubble
-        // up through this view's element tree and reach their handlers.
-        let focus_handle = input_state.focus_handle(cx);
-        window.defer(cx, move |window, cx| {
-            focus_handle.focus(window, cx);
         });
 
         let _subscriptions = vec![cx.subscribe(&input_state, |_, _, _: &InputEvent, _| {})];
@@ -82,7 +75,7 @@ impl Example {
 }
 
 impl Render for Example {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .id("editor")
             .size_full()
@@ -107,39 +100,40 @@ impl Render for Example {
                     )
                     .child(
                         resizable_panel().child(
-                            markdown(self.input_state.read(cx).value().clone())
-                                .code_block_actions(|code_block, _window, _cx| {
-                                    let code = code_block.code();
-                                    let lang = code_block.lang();
+                            TextView::markdown(
+                                "preview",
+                                self.input_state.read(cx).value().clone(),
+                                window,
+                                cx,
+                            )
+                            .code_block_actions(|code_block, _window, _cx| {
+                                let code = code_block.code();
+                                let lang = code_block.lang();
 
-                                    h_flex()
-                                        .gap_1()
-                                        .child(Clipboard::new("copy").value(code.clone()))
-                                        .when_some(lang, |this, lang| {
-                                            // Only show run terminal button for certain languages
-                                            if lang.as_ref() == "rust" || lang.as_ref() == "python"
-                                            {
-                                                this.child(
-                                                    Button::new("run-terminal")
-                                                        .icon(IconName::SquareTerminal)
-                                                        .ghost()
-                                                        .xsmall()
-                                                        .on_click(move |_, _, _cx| {
-                                                            println!(
-                                                                "Running {} code: {}",
-                                                                lang, code
-                                                            );
-                                                        }),
-                                                )
-                                            } else {
-                                                this
-                                            }
-                                        })
-                                })
-                                .flex_none()
-                                .p_5()
-                                .scrollable(true)
-                                .selectable(true),
+                                h_flex()
+                                    .gap_1()
+                                    .child(Clipboard::new("copy").value(code.clone()))
+                                    .when_some(lang, |this, lang| {
+                                        // Only show run terminal button for certain languages
+                                        if lang.as_ref() == "rust" || lang.as_ref() == "python" {
+                                            this.child(
+                                                Button::new("run-terminal")
+                                                    .icon(IconName::SquareTerminal)
+                                                    .ghost()
+                                                    .xsmall()
+                                                    .on_click(move |_, _, _cx| {
+                                                        println!("Running {} code: {}", lang, code);
+                                                    }),
+                                            )
+                                        } else {
+                                            this
+                                        }
+                                    })
+                            })
+                            .flex_none()
+                            .p_5()
+                            .scrollable(true)
+                            .selectable(true),
                         ),
                     ),
             )
@@ -147,7 +141,7 @@ impl Render for Example {
 }
 
 fn main() {
-    let app = gpui_platform::application().with_assets(Assets);
+    let app = Application::new().with_assets(Assets);
 
     app.run(move |cx| {
         gpui_component_story::init(cx);

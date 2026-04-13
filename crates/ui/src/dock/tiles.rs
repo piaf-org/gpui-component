@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    ActiveTheme, ElementExt, Icon, IconName, h_flex,
+    ActiveTheme, Icon, IconName, h_flex,
     history::{History, HistoryItem},
     scroll::{Scrollbar, ScrollbarShow},
     v_flex,
@@ -18,8 +18,8 @@ use gpui::{
     AnyElement, App, AppContext, Bounds, Context, DismissEvent, Div, DragMoveEvent, Empty,
     EntityId, EventEmitter, FocusHandle, Focusable, InteractiveElement, IntoElement, MouseButton,
     MouseDownEvent, MouseUpEvent, ParentElement, Pixels, Point, Render, ScrollHandle, Size,
-    StatefulInteractiveElement, Styled, WeakEntity, Window, actions, div, prelude::FluentBuilder,
-    px, size,
+    StatefulInteractiveElement, Styled, WeakEntity, Window, actions, canvas, div,
+    prelude::FluentBuilder, px, size,
 };
 
 actions!(tiles, [Undo, Redo]);
@@ -122,9 +122,7 @@ pub struct AnyDrag {
 
 impl AnyDrag {
     pub fn new(value: impl Any) -> Self {
-        Self {
-            value: Arc::new(value),
-        }
+        Self { value: Arc::new(value) }
     }
 }
 
@@ -335,10 +333,7 @@ impl Tiles {
                     ((drag_top - other_top).abs(), other_top),
                     ((drag_top - other_bottom).abs(), other_bottom),
                     ((drag_bottom - other_top).abs(), other_top - drag_height),
-                    (
-                        (drag_bottom - other_bottom).abs(),
-                        other_bottom - drag_height,
-                    ),
+                    ((drag_bottom - other_bottom).abs(), other_bottom - drag_height),
                 ];
 
                 for (dist, snap_pos) in candidates {
@@ -457,21 +452,13 @@ impl Tiles {
         } else {
             previous_bounds.origin.y
         };
-        // When both x and width are provided (left resize)
-        let final_width = if new_x.is_some() && new_width.is_some() {
-            let right_edge = previous_bounds.origin.x + previous_bounds.size.width;
-            (right_edge - final_x).max(MINIMUM_SIZE.width)
-        } else if let Some(width) = new_width {
+        let final_width = if let Some(width) = new_width {
             round_to_nearest_ten(width, cx)
         } else {
             previous_bounds.size.width
         };
 
-        // When both y and height are provided (top resize)
-        let final_height = if new_y.is_some() && new_height.is_some() {
-            let bottom_edge = previous_bounds.origin.y + previous_bounds.size.height;
-            (bottom_edge - final_y).max(MINIMUM_SIZE.height)
-        } else if let Some(height) = new_height {
+        let final_height = if let Some(height) = new_height {
             round_to_nearest_ten(height, cx)
         } else {
             previous_bounds.size.height
@@ -705,7 +692,7 @@ impl Tiles {
                             let new_width = (drag_data.last_bounds.size.width + size_delta)
                                 .max(MINIMUM_SIZE.width);
                             this.resize(Some(new_x), None, Some(new_width), None, window, cx);
-                        }
+                        },
                     },
                 ))
                 .into_any_element(),
@@ -760,7 +747,7 @@ impl Tiles {
                             let new_width =
                                 (drag_data.last_bounds.size.width + delta).max(MINIMUM_SIZE.width);
                             this.resize(None, None, Some(new_width), None, window, cx);
-                        }
+                        },
                     },
                 ))
                 .into_any_element(),
@@ -812,11 +799,11 @@ impl Tiles {
                             let pos = e.event.position;
                             let delta = drag_data.last_position.y - pos.y;
                             let new_y = (drag_data.last_bounds.origin.y - delta).max(px(0.));
-                            let size_delta = drag_data.last_bounds.origin.y - new_y;
+                            let size_delta = drag_data.last_position.y - new_y;
                             let new_height = (drag_data.last_bounds.size.height + size_delta)
-                                .max(MINIMUM_SIZE.height);
+                                .max(MINIMUM_SIZE.width);
                             this.resize(None, Some(new_y), None, Some(new_height), window, cx);
-                        }
+                        },
                     },
                 ))
                 .into_any_element(),
@@ -868,10 +855,10 @@ impl Tiles {
 
                             let pos = e.event.position;
                             let delta = pos.y - drag_data.last_position.y;
-                            let new_height = (drag_data.last_bounds.size.height + delta)
-                                .max(MINIMUM_SIZE.height);
+                            let new_height =
+                                (drag_data.last_bounds.size.height + delta).max(MINIMUM_SIZE.width);
                             this.resize(None, None, None, Some(new_height), window, cx);
-                        }
+                        },
                     },
                 ))
                 .into_any_element(),
@@ -948,7 +935,7 @@ impl Tiles {
                                             window,
                                             cx,
                                         );
-                                    }
+                                    },
                                 }
                             },
                         )),
@@ -1016,18 +1003,16 @@ impl Tiles {
                 cx.stop_propagation();
                 cx.new(|_| drag.clone())
             })
-            .on_drag_move(
-                cx.listener(
-                    move |this, e: &DragMoveEvent<DragMoving>, _, cx| match e.drag(cx) {
-                        DragMoving(id) => {
-                            if *id != entity_id {
-                                return;
-                            }
-                            this.update_position(e.event.position, cx);
+            .on_drag_move(cx.listener(move |this, e: &DragMoveEvent<DragMoving>, _, cx| {
+                match e.drag(cx) {
+                    DragMoving(id) => {
+                        if *id != entity_id {
+                            return;
                         }
+                        this.update_position(e.event.position, cx);
                     },
-                ),
-            )
+                }
+            }))
             .into_any_element()
     }
 
@@ -1152,10 +1137,7 @@ fn round_to_nearest_ten(value: Pixels, cx: &App) -> Pixels {
 
 #[inline]
 fn round_point_to_nearest_ten(point: Point<Pixels>, cx: &App) -> Point<Pixels> {
-    Point::new(
-        round_to_nearest_ten(point.x, cx),
-        round_to_nearest_ten(point.y, cx),
-    )
+    Point::new(round_to_nearest_ten(point.x, cx), round_to_nearest_ten(point.y, cx))
 }
 
 impl Focusable for Tiles {
@@ -1200,7 +1182,14 @@ impl Render for Tiles {
                             .into_iter()
                             .map(|item| self.render_panel(&item, window, cx)),
                     )
-                    .on_prepaint(move |bounds, _, cx| view.update(cx, |r, _| r.bounds = bounds))
+                    .child({
+                        canvas(
+                            move |bounds, _, cx| view.update(cx, |r, _| r.bounds = bounds),
+                            |_, _, _, _| {},
+                        )
+                        .absolute()
+                        .size_full()
+                    })
                     .on_drop(cx.listener(move |_, item: &AnyDrag, _, cx| {
                         cx.emit(DragDrop(item.clone()));
                     })),

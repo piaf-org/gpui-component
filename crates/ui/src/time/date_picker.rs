@@ -14,7 +14,7 @@ use crate::{
     actions::{Cancel, Confirm},
     button::{Button, ButtonVariants as _},
     h_flex,
-    input::{Delete, clear_button, input_style},
+    input::{Delete, clear_button},
     v_flex,
 };
 
@@ -110,16 +110,17 @@ impl DatePickerState {
             this
         });
 
-        let _subscriptions = vec![cx.subscribe_in(
-            &calendar,
-            window,
-            |this, _, ev: &CalendarEvent, window, cx| match ev {
-                CalendarEvent::Selected(date) => {
-                    this.update_date(*date, true, window, cx);
-                    this.focus_handle.focus(window, cx);
-                }
-            },
-        )];
+        let _subscriptions =
+            vec![
+                cx.subscribe_in(&calendar, window, |this, _, ev: &CalendarEvent, window, cx| {
+                    match ev {
+                        CalendarEvent::Selected(date) => {
+                            this.update_date(*date, true, window, cx);
+                            this.focus_handle.focus(window, cx);
+                        },
+                    }
+                }),
+            ];
 
         Self {
             focus_handle: cx.focus_handle(),
@@ -222,14 +223,13 @@ impl DatePickerState {
     }
 
     fn clean(&mut self, _: &gpui::ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
-        cx.stop_propagation();
         match self.date {
             Date::Single(_) => {
                 self.update_date(Date::Single(None), true, window, cx);
-            }
+            },
             Date::Range(_, _) => {
                 self.update_date(Date::Range(None, None), true, window, cx);
-            }
+            },
         }
     }
 
@@ -247,10 +247,10 @@ impl DatePickerState {
         match preset.value {
             DateRangePresetValue::Single(single) => {
                 self.update_date(Date::Single(Some(single)), true, window, cx)
-            }
+            },
             DateRangePresetValue::Range(start, end) => {
                 self.update_date(Date::Range(Some(start), Some(end)), true, window, cx)
-            }
+            },
         }
     }
 }
@@ -368,8 +368,6 @@ impl RenderOnce for DatePicker {
             .format(&state.date_format)
             .unwrap_or(placeholder.clone());
 
-        let (bg, fg) = input_style(self.disabled, cx);
-
         div()
             .id(self.id.clone())
             .key_context(CONTEXT)
@@ -392,14 +390,16 @@ impl RenderOnce for DatePicker {
                     .items_center()
                     .justify_between()
                     .when(self.appearance, |this| {
-                        this.bg(bg)
-                            .text_color(fg)
-                            .when(self.disabled, |this| this.opacity(0.5))
+                        this.bg(cx.theme().background)
                             .border_1()
                             .border_color(cx.theme().input)
                             .rounded(cx.theme().radius)
                             .when(cx.theme().shadow, |this| this.shadow_xs())
                             .when(is_focused, |this| this.focused_border(cx))
+                            .when(self.disabled, |this| {
+                                this.bg(cx.theme().muted)
+                                    .text_color(cx.theme().muted_foreground)
+                            })
                     })
                     .overflow_hidden()
                     .input_text_size(self.size)
@@ -415,15 +415,7 @@ impl RenderOnce for DatePicker {
                             .items_center()
                             .justify_between()
                             .gap_1()
-                            .child(
-                                div()
-                                    .w_full()
-                                    .overflow_hidden()
-                                    .when(!state.date.is_some(), |this| {
-                                        this.text_color(cx.theme().muted_foreground)
-                                    })
-                                    .child(display_title),
-                            )
+                            .child(div().w_full().overflow_hidden().child(display_title))
                             .when(!self.disabled, |this| {
                                 this.when(show_clean, |this| {
                                     this.child(clear_button(cx).on_click(

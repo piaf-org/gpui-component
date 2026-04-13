@@ -144,7 +144,7 @@ Notification::new()
 ### Custom Content
 
 ```rust
-use gpui_component::text::markdown;
+use gpui_component::text::TextView;
 
 let markdown_content = r#"
 ## Custom Notification
@@ -155,7 +155,13 @@ let markdown_content = r#"
 
 Notification::new()
     .content(|_, window, cx| {
-        markdown(markdown_content).into_any_element()
+        TextView::markdown(
+            "custom-content",
+            markdown_content,
+            window,
+            cx,
+        )
+        .into_any_element()
     })
 ```
 
@@ -256,7 +262,7 @@ Notification::warning("System maintenance will begin in 30 minutes.")
 ### Batch Operation Results
 
 ```rust
-use gpui_component::text::markdown;
+use gpui_component::text::TextView;
 
 let results_content = r#"
 ## Batch Operation Complete
@@ -271,7 +277,8 @@ let results_content = r#"
 Notification::success("Batch operation completed with some failures.")
     .title("Operation Results")
     .content(|window, cx| {
-        markdown(results_content).into_any_element()
+        TextView::markdown("results", results_content, window, cx)
+            .into_any_element()
     })
     .autohide(false)
 ```

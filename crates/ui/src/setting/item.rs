@@ -65,8 +65,8 @@ impl SettingItem {
         match &mut self {
             SettingItem::Item { description: d, .. } => {
                 *d = Some(description.into());
-            }
-            SettingItem::Element { .. } => {}
+            },
+            SettingItem::Element { .. } => {},
         }
         self
     }
@@ -78,24 +78,20 @@ impl SettingItem {
         match &mut self {
             SettingItem::Item { layout: l, .. } => {
                 *l = layout;
-            }
-            SettingItem::Element { .. } => {}
+            },
+            SettingItem::Element { .. } => {},
         }
         self
     }
 
-    pub(crate) fn is_match(&self, query: &str, cx: &App) -> bool {
+    pub(crate) fn is_match(&self, query: &str) -> bool {
         match self {
-            SettingItem::Item {
-                title, description, ..
-            } => {
+            SettingItem::Item { title, description, .. } => {
                 title.to_lowercase().contains(&query.to_lowercase())
                     || description.as_ref().map_or(false, |d| {
-                        d.get_text(cx)
-                            .to_lowercase()
-                            .contains(&query.to_lowercase())
+                        d.as_str().to_lowercase().contains(&query.to_lowercase())
                     })
-            }
+            },
             // We need to show all custom elements when not searching.
             SettingItem::Element { .. } => query.is_empty(),
         }
@@ -111,7 +107,7 @@ impl SettingItem {
     pub(crate) fn reset(&self, window: &mut Window, cx: &mut App) {
         match self {
             SettingItem::Item { field, .. } => field.reset(window, cx),
-            SettingItem::Element { .. } => {}
+            SettingItem::Element { .. } => {},
         }
     }
 
@@ -127,22 +123,22 @@ impl SettingItem {
         let renderer: Box<dyn SettingFieldRender> = match type_id {
             t if t == std::any::TypeId::of::<bool>() => {
                 Box::new(BoolField::new(field_type.is_switch()))
-            }
+            },
             t if t == TypeId::of::<f64>() && field_type.is_number_input() => {
                 Box::new(NumberField::new(field_type.number_input_options()))
-            }
+            },
             t if t == TypeId::of::<SharedString>() && field_type.is_input() => {
                 Box::new(StringField::<SharedString>::new())
-            }
+            },
             t if t == TypeId::of::<String>() && field_type.is_input() => {
                 Box::new(StringField::<String>::new())
-            }
-            t if t == TypeId::of::<SharedString>() && field_type.is_dropdown() => Box::new(
-                DropdownField::<SharedString>::new(field_type.dropdown_options()),
-            ),
+            },
+            t if t == TypeId::of::<SharedString>() && field_type.is_dropdown() => {
+                Box::new(DropdownField::<SharedString>::new(field_type.dropdown_options()))
+            },
             t if t == TypeId::of::<String>() && field_type.is_dropdown() => {
                 Box::new(DropdownField::<String>::new(field_type.dropdown_options()))
-            }
+            },
             _ if field_type.is_element() => Box::new(ElementField::new(field_type.element())),
             _ => unimplemented!("Unsupported setting type: {}", field.deref().type_name()),
         };
@@ -206,7 +202,7 @@ impl SettingItem {
                     .into_any_element(),
                 SettingItem::Element { render } => {
                     (render)(&options, window, cx).into_any_element()
-                }
+                },
             })
     }
 }

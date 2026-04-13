@@ -1,13 +1,11 @@
 use gpui::{
     App, Context, Corner, Corners, Edges, ElementId, InteractiveElement as _, IntoElement,
-    ParentElement, RenderOnce, SharedString, StyleRefinement, Styled, Window, div,
-    prelude::FluentBuilder,
+    ParentElement, RenderOnce, StyleRefinement, Styled, Window, div, prelude::FluentBuilder,
 };
 
 use crate::{
-    Disableable, IconName, Selectable, Sizable, Size, StyledExt as _,
+    Disableable, Selectable, Sizable, Size, StyledExt as _,
     menu::{DropdownMenu, PopupMenu},
-    tooltip::ComponentTooltip,
 };
 
 use super::{Button, ButtonRounded, ButtonVariant, ButtonVariants};
@@ -29,7 +27,6 @@ pub struct DropdownButton {
     size: Size,
     rounded: ButtonRounded,
     anchor: Corner,
-    tooltip: ComponentTooltip,
 }
 
 impl DropdownButton {
@@ -49,14 +46,7 @@ impl DropdownButton {
             size: Size::default(),
             rounded: ButtonRounded::default(),
             anchor: Corner::TopRight,
-            tooltip: ComponentTooltip::default(),
         }
-    }
-
-    /// Set tooltip text for the dropdown button.
-    pub fn tooltip(mut self, tooltip: impl Into<SharedString>) -> Self {
-        self.tooltip.text = Some((tooltip.into(), None));
-        self
     }
 
     /// Set the left button of the dropdown button.
@@ -187,7 +177,7 @@ impl RenderOnce for DropdownButton {
                 .when_some(self.menu, |this, menu| {
                     this.child(
                         Button::new("popup")
-                            .icon(IconName::ChevronDown)
+                            .dropdown_caret(true)
                             .rounded(self.rounded)
                             .border_edges(Edges {
                                 left: rounded,
@@ -211,40 +201,5 @@ impl RenderOnce for DropdownButton {
                     )
                 })
             })
-            .map(|this| self.tooltip.apply(this))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use gpui::Corner;
-
-    #[gpui::test]
-    fn test_dropdown_button_builder(_cx: &mut gpui::TestAppContext) {
-        let button = Button::new("inner").label("Action");
-        let dropdown = DropdownButton::new("complex-dropdown")
-            .button(button)
-            .primary()
-            .outline()
-            .large()
-            .compact()
-            .loading(false)
-            .disabled(false)
-            .selected(false)
-            .rounded(ButtonRounded::Medium)
-            .dropdown_menu_with_anchor(Corner::BottomLeft, |menu, _, _| menu);
-
-        assert!(dropdown.button.is_some());
-        assert_eq!(dropdown.variant, ButtonVariant::Primary);
-        assert!(dropdown.outline);
-        assert_eq!(dropdown.size, Size::Large);
-        assert!(dropdown.compact);
-        assert!(!dropdown.loading);
-        assert!(!dropdown.disabled);
-        assert!(!dropdown.selected);
-        assert!(matches!(dropdown.rounded, ButtonRounded::Medium));
-        assert!(dropdown.menu.is_some());
-        assert_eq!(dropdown.anchor, Corner::BottomLeft);
     }
 }

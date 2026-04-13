@@ -3,11 +3,11 @@ use std::rc::Rc;
 use gpui::{
     App, ClickEvent, ElementId, Empty, Hsla, InteractiveElement, IntoElement, ParentElement as _,
     RenderOnce, SharedString, StatefulInteractiveElement, StyleRefinement, Styled, Window, div,
-    prelude::FluentBuilder as _, px, rems, transparent_white,
+    prelude::FluentBuilder as _, px, rems,
 };
 
 use crate::{
-    ActiveTheme as _, Colorize, Icon, IconName, Sizable, Size, StyledExt, h_flex,
+    ActiveTheme as _, Icon, IconName, Sizable, Size, StyledExt, h_flex,
     text::{Text, TextViewStyle},
 };
 
@@ -15,7 +15,7 @@ use crate::{
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum AlertVariant {
     #[default]
-    Default,
+    Secondary,
     Info,
     Success,
     Warning,
@@ -25,31 +25,31 @@ pub enum AlertVariant {
 impl AlertVariant {
     fn fg(&self, cx: &App) -> Hsla {
         match self {
-            Self::Default => cx.theme().foreground,
-            Self::Info => cx.theme().info,
-            Self::Success => cx.theme().success,
-            Self::Warning => cx.theme().warning,
-            Self::Error => cx.theme().danger,
+            AlertVariant::Secondary => cx.theme().secondary_foreground,
+            AlertVariant::Info => cx.theme().info,
+            AlertVariant::Success => cx.theme().success,
+            AlertVariant::Warning => cx.theme().warning,
+            AlertVariant::Error => cx.theme().danger,
         }
     }
 
-    fn bg(&self, cx: &App) -> Hsla {
+    fn color(&self, cx: &App) -> Hsla {
         match self {
-            Self::Default => cx.theme().background,
-            Self::Info => cx.theme().info.mix_oklab(transparent_white(), 0.04),
-            Self::Success => cx.theme().success.mix_oklab(transparent_white(), 0.04),
-            Self::Warning => cx.theme().warning.mix_oklab(transparent_white(), 0.04),
-            Self::Error => cx.theme().danger.mix_oklab(transparent_white(), 0.04),
+            AlertVariant::Secondary => cx.theme().secondary,
+            AlertVariant::Info => cx.theme().info,
+            AlertVariant::Success => cx.theme().success,
+            AlertVariant::Warning => cx.theme().warning,
+            AlertVariant::Error => cx.theme().danger,
         }
     }
 
     fn border_color(&self, cx: &App) -> Hsla {
         match self {
-            Self::Default => cx.theme().border,
-            Self::Info => cx.theme().info.mix_oklab(transparent_white(), 0.3),
-            Self::Success => cx.theme().success.mix_oklab(transparent_white(), 0.3),
-            Self::Warning => cx.theme().warning.mix_oklab(transparent_white(), 0.3),
-            Self::Error => cx.theme().danger.mix_oklab(transparent_white(), 0.3),
+            AlertVariant::Secondary => cx.theme().border,
+            AlertVariant::Info => cx.theme().info,
+            AlertVariant::Success => cx.theme().success,
+            AlertVariant::Warning => cx.theme().warning,
+            AlertVariant::Error => cx.theme().danger,
         }
     }
 }
@@ -183,7 +183,7 @@ impl RenderOnce for Alert {
             _ => (cx.theme().radius, px(16.), px(10.), px(12.)),
         };
 
-        let bg = self.variant.bg(cx);
+        let color = self.variant.color(cx);
         let fg = self.variant.fg(cx);
         let border_color = self.variant.border_color(cx);
 
@@ -191,7 +191,7 @@ impl RenderOnce for Alert {
             .id(self.id)
             .w_full()
             .text_color(fg)
-            .bg(bg)
+            .bg(color.opacity(0.08))
             .px(padding_x)
             .py(padding_y)
             .gap(gap)
@@ -237,8 +237,8 @@ impl RenderOnce for Alert {
                         .id("close")
                         .p_0p5()
                         .rounded(cx.theme().radius)
-                        .hover(|this| this.bg(bg.opacity(0.8)))
-                        .active(|this| this.bg(bg.opacity(0.9)))
+                        .hover(|this| this.bg(color.opacity(0.1)))
+                        .active(|this| this.bg(color.opacity(0.2)))
                         .on_click(move |ev, window, cx| {
                             on_close(ev, window, cx);
                         })

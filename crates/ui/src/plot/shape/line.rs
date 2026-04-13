@@ -5,7 +5,10 @@ use gpui::{
     quad, size,
 };
 
-use crate::plot::{StrokeStyle, origin_point};
+use crate::{
+    PixelsExt,
+    plot::{StrokeStyle, origin_point},
+};
 
 #[allow(clippy::type_complexity)]
 pub struct Line<T> {
@@ -172,23 +175,20 @@ impl<T> Line<T> {
 
                     builder.cubic_bezier_to(p2, c1, c2);
                 }
-            }
+            },
             StrokeStyle::Linear => {
                 builder.move_to(dots[0]);
                 for p in &dots[1..] {
                     builder.line_to(*p);
                 }
-            }
+            },
             StrokeStyle::StepAfter => {
                 builder.move_to(dots[0]);
-                for (i, p) in dots.windows(2).enumerate() {
-                    builder.line_to(Point::new(p[1].x, p[0].y));
-                    // Don't draw the vertical line for the last point
-                    if i < dots.len() - 2 {
-                        builder.line_to(p[1]);
-                    }
+                for d in dots.windows(2) {
+                    builder.line_to(Point::new(d[1].x, d[0].y));
+                    builder.line_to(Point::new(d[1].x, d[1].y));
                 }
-            }
+            },
         }
 
         (builder.build().ok(), paint_dots)

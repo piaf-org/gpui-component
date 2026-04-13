@@ -7,13 +7,12 @@ use rust_i18n::t;
 
 use crate::{
     ActiveTheme as _,
-    global_state::GlobalState,
     input::{self, InputState, popovers::ContextMenu},
     menu::PopupMenu,
 };
 
 /// Context menu for mouse right clicks.
-pub(crate) struct InputContextMenu {
+pub(crate) struct MouseContextMenu {
     editor: Entity<InputState>,
     menu: Entity<PopupMenu>,
     mouse_position: Point<Pixels>,
@@ -30,18 +29,12 @@ impl InputState {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        // Check if we are already in a deferred context (e.g., inside a Popover)
-        // If so, don't show the context menu to prevent double-deferred panic
-        if GlobalState::global(cx).is_in_deferred_context() {
-            return;
-        }
-
         // Show Mouse context menu
         if !self.selected_range.contains(offset) {
             self.move_to(offset, None, cx);
         }
 
-        self.context_menu_content = Some(ContextMenu::RightClick(self.context_menu.clone()));
+        self.context_menu = Some(ContextMenu::MouseContext(self.mouse_context_menu.clone()));
 
         let is_code_editor = self.mode.is_code_editor();
         if is_code_editor {
@@ -55,7 +48,7 @@ impl InputState {
         let has_paste = is_enable && cx.read_from_clipboard().is_some();
 
         let action_context = self.focus_handle.clone();
-        self.context_menu.update(cx, |this, cx| {
+        self.mouse_context_menu.update(cx, |this, cx| {
             this.mouse_position = event.position;
             this.menu.update(cx, |menu, cx| {
                 let new_menu = PopupMenu::new(cx)
@@ -86,15 +79,14 @@ impl InputState {
                 menu.action_context = Some(action_context);
                 cx.notify();
             });
-            cx.defer_in(window, |this, _, cx| {
-                this.open = true;
-                cx.notify();
-            });
+            this.open = true;
+
+            cx.notify();
         });
     }
 }
 
-impl InputContextMenu {
+impl MouseContextMenu {
     pub(crate) fn new(
         editor: Entity<InputState>,
         window: &mut Window,
@@ -133,7 +125,7 @@ impl InputContextMenu {
     }
 }
 
-impl Render for InputContextMenu {
+impl Render for MouseContextMenu {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if !self.open {
             return div().into_any_element();

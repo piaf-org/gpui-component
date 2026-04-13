@@ -26,7 +26,7 @@ use gpui::{
 };
 use smallvec::SmallVec;
 
-use crate::{AxisExt, scroll::ScrollbarHandle};
+use crate::{AxisExt, PixelsExt, scroll::ScrollbarHandle};
 
 struct VirtualListScrollHandleState {
     axis: Axis,
@@ -268,7 +268,7 @@ impl VirtualList {
                         - bounds.left()
                         - bounds.size.width.half()
                 }
-            }
+            },
             _ => {
                 // Ref: https://github.com/zed-industries/zed/blob/0d145289e0867a8d5d63e5e1397a5ca69c9d49c3/crates/gpui/src/elements/div.rs#L3026
                 if self.axis.is_vertical() {
@@ -284,7 +284,7 @@ impl VirtualList {
                         scroll_offset.x = content_bounds.right() - bounds.right();
                     }
                 }
-            }
+            },
         }
         self.scroll_handle.set_offset(scroll_offset);
         scroll_offset
@@ -307,9 +307,7 @@ impl VirtualList {
             return Size::default();
         };
         let available_space = size(
-            list_width.map_or(AvailableSpace::MinContent, |width| {
-                AvailableSpace::Definite(width)
-            }),
+            list_width.map_or(AvailableSpace::MinContent, |width| AvailableSpace::Definite(width)),
             AvailableSpace::MinContent,
         );
         item_to_measure.layout_as_root(available_space, window, cx)
@@ -407,12 +405,12 @@ impl Element for VirtualList {
                                         let x = *cumulative;
                                         *cumulative += *size;
                                         Some(x)
-                                    }
+                                    },
                                     Axis::Vertical => {
                                         let y = *cumulative;
                                         *cumulative += *size;
                                         Some(y)
-                                    }
+                                    },
                                 })
                                 .collect::<Vec<_>>();
 
@@ -458,7 +456,7 @@ impl Element for VirtualList {
                                                     AvailableSpace::MinContent
                                                     | AvailableSpace::MaxContent => {
                                                         size_layout.content_size.width
-                                                    }
+                                                    },
                                                 },
                                             );
                                             size.height = known_dimensions.width.unwrap_or(
@@ -467,7 +465,7 @@ impl Element for VirtualList {
                                                     AvailableSpace::MinContent
                                                     | AvailableSpace::MaxContent => {
                                                         size_layout.content_size.height
-                                                    }
+                                                    },
                                                 },
                                             );
                                         } else {
@@ -477,7 +475,7 @@ impl Element for VirtualList {
                                                     AvailableSpace::MinContent
                                                     | AvailableSpace::MaxContent => {
                                                         size_layout.content_size.width
-                                                    }
+                                                    },
                                                 },
                                             );
                                             size.height = known_dimensions.height.unwrap_or(
@@ -486,7 +484,7 @@ impl Element for VirtualList {
                                                     AvailableSpace::MinContent
                                                     | AvailableSpace::MaxContent => {
                                                         size_layout.content_size.height
-                                                    }
+                                                    },
                                                 },
                                             );
                                         }
@@ -495,7 +493,7 @@ impl Element for VirtualList {
                                     }
                                 })
                             })
-                        }
+                        },
                         ListSizingBehavior::Auto => window
                             .with_text_style(style.text_style().cloned(), |window| {
                                 window.request_layout(style, None, cx)
@@ -540,10 +538,7 @@ impl Element for VirtualList {
 
         let content_bounds = Bounds::from_corners(
             bounds.origin
-                + point(
-                    border_widths.left + paddings.left,
-                    border_widths.top + paddings.top,
-                ),
+                + point(border_widths.left + paddings.left, border_widths.top + paddings.top),
             bounds.bottom_right()
                 - point(
                     border_widths.right + paddings.right,
@@ -615,12 +610,12 @@ impl Element for VirtualList {
                             Axis::Horizontal if scroll_offset.x < min_scroll_offset => {
                                 scroll_offset.x = min_scroll_offset;
                                 self.scroll_handle.set_offset(scroll_offset);
-                            }
+                            },
                             Axis::Vertical if scroll_offset.y < min_scroll_offset => {
                                 scroll_offset.y = min_scroll_offset;
                                 self.scroll_handle.set_offset(scroll_offset);
-                            }
-                            _ => {}
+                            },
+                            _ => {},
                         }
                     }
 
@@ -652,7 +647,7 @@ impl Element for VirtualList {
                                 last_visible_element_ix += 1;
                             }
                             (first_visible_element_ix, last_visible_element_ix)
-                        }
+                        },
                         Axis::Vertical => {
                             let mut cumulative_size = px(0.);
                             let mut first_visible_element_ix = 0;
@@ -680,7 +675,7 @@ impl Element for VirtualList {
                                 last_visible_element_ix += 1;
                             }
                             (first_visible_element_ix, last_visible_element_ix)
-                        }
+                        },
                     };
 
                     let visible_range = first_visible_element_ix
@@ -695,11 +690,11 @@ impl Element for VirtualList {
                                 Axis::Horizontal => {
                                     content_bounds.origin
                                         + point(item_origins[ix] + scroll_offset.x, scroll_offset.y)
-                                }
+                                },
                                 Axis::Vertical => {
                                     content_bounds.origin
                                         + point(scroll_offset.x, item_origins[ix] + scroll_offset.y)
-                                }
+                                },
                             };
 
                             let available_space = match self.axis {

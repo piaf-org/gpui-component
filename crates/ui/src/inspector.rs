@@ -2,10 +2,10 @@ use std::{cell::OnceCell, collections::HashMap, fmt::Write as _, rc::Rc, sync::O
 
 use anyhow::Result;
 use gpui::{
-    actions, div, inspector_reflection::FunctionReflection, prelude::FluentBuilder, px, AnyElement,
-    App, AppContext, Context, DivInspectorState, Entity, Inspector, InspectorElementId,
+    AnyElement, App, AppContext, Context, DivInspectorState, Entity, Inspector, InspectorElementId,
     InteractiveElement as _, IntoElement, KeyBinding, ParentElement as _, Refineable as _, Render,
-    SharedString, StyleRefinement, Styled, Subscription, Task, Window,
+    SharedString, StyleRefinement, Styled, Subscription, Task, Window, actions, div,
+    inspector_reflection::FunctionReflection, prelude::FluentBuilder, px,
 };
 use lsp_types::{
     CompletionItem, CompletionItemKind, CompletionResponse, CompletionTextEdit, Diagnostic,
@@ -14,6 +14,7 @@ use lsp_types::{
 use ropey::Rope;
 
 use crate::{
+    ActiveTheme, IconName, Selectable, Sizable, TITLE_BAR_HEIGHT,
     alert::Alert,
     button::{Button, ButtonVariants},
     clipboard::Clipboard,
@@ -21,7 +22,7 @@ use crate::{
     h_flex,
     input::{CompletionProvider, Input, InputEvent, InputState, RopeExt, TabSize},
     link::Link,
-    v_flex, ActiveTheme, IconName, Selectable, Sizable, TITLE_BAR_HEIGHT,
+    v_flex,
 };
 
 actions!(inspector, [ToggleInspector]);
@@ -111,8 +112,8 @@ impl DivInspector {
                     InputEvent::Change => {
                         let new_style = state.read(cx).value();
                         this.edit_json(new_style.as_str(), window, cx);
-                    }
-                    _ => {}
+                    },
+                    _ => {},
                 },
             ),
             cx.subscribe_in(
@@ -122,8 +123,8 @@ impl DivInspector {
                     InputEvent::Change => {
                         let new_style = state.read(cx).value();
                         this.edit_rust(new_style.as_str(), window, cx);
-                    }
-                    _ => {}
+                    },
+                    _ => {},
                 },
             ),
         ];
@@ -189,11 +190,11 @@ impl DivInspector {
                 let rust_style = self.update_rust_from_style(&new_style, window, cx);
                 self.unconvertible_style = new_style.subtract(&rust_style);
                 self.update_element_style(new_style, window, cx);
-            }
+            },
             Err(e) => {
                 self.json_state.error = Some(e.to_string().trim_end().to_string().into());
                 window.refresh();
-            }
+            },
         }
     }
 
@@ -393,7 +394,7 @@ fn rust_to_style(mut style: StyleRefinement, source: &str) -> (StyleRefinement, 
                 };
 
                 diagnostics.push(diagnostic);
-            }
+            },
         }
     }
 
@@ -575,9 +576,9 @@ impl CompletionProvider for LspProvider {
             match rope.char_at(offset.saturating_sub(left_offset)) {
                 Some('.') => {
                     break;
-                }
+                },
                 None => break,
-                _ => {}
+                _ => {},
             }
             left_offset += 1;
         }
@@ -632,7 +633,7 @@ impl CompletionProvider for LspProvider {
 
 #[cfg(test)]
 mod tests {
-    use gpui::{rems, AbsoluteLength, DefiniteLength, Length};
+    use gpui::{AbsoluteLength, DefiniteLength, Length, rems};
     use indoc::indoc;
     use lsp_types::Position;
 
@@ -656,9 +657,7 @@ mod tests {
         );
         assert_eq!(
             style.margin.left,
-            Some(Length::Definite(DefiniteLength::Absolute(
-                AbsoluteLength::Rems(rems(0.5))
-            )))
+            Some(Length::Definite(DefiniteLength::Absolute(AbsoluteLength::Rems(rems(0.5)))))
         );
 
         let (_, diagnostics) = super::rust_to_style(

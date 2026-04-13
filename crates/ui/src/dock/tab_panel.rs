@@ -205,10 +205,6 @@ impl TabPanel {
         }
     }
 
-    pub fn active_ix(&self) -> usize {
-        self.active_ix
-    }
-
     fn set_active_ix(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Self>) {
         if ix == self.active_ix {
             return;
@@ -543,14 +539,14 @@ impl TabPanel {
         if !match placement {
             DockPlacement::Left => {
                 dock_area.left_dock.is_some() && toggle_button_panels.left == Some(view_entity_id)
-            }
+            },
             DockPlacement::Right => {
                 dock_area.right_dock.is_some() && toggle_button_panels.right == Some(view_entity_id)
-            }
+            },
             DockPlacement::Bottom => {
                 dock_area.bottom_dock.is_some()
                     && toggle_button_panels.bottom == Some(view_entity_id)
-            }
+            },
             DockPlacement::Center => unreachable!(),
         } {
             return None;
@@ -565,21 +561,21 @@ impl TabPanel {
                 } else {
                     IconName::PanelLeftOpen
                 }
-            }
+            },
             DockPlacement::Right => {
                 if is_open {
                     IconName::PanelRight
                 } else {
                     IconName::PanelRightOpen
                 }
-            }
+            },
             DockPlacement::Bottom => {
                 if is_open {
                     IconName::PanelBottom
                 } else {
                     IconName::PanelBottomOpen
                 }
-            }
+            },
             DockPlacement::Center => unreachable!(),
         };
 
@@ -694,6 +690,7 @@ impl TabPanel {
         let tabs_count = self.panels.len();
 
         TabBar::new("tab-bar")
+            .tab_item_top_offset(-px(1.))
             .track_scroll(&self.tab_bar_scroll_handle)
             .when(has_extend_dock_button, |this| {
                 this.prefix(
@@ -726,9 +723,11 @@ impl TabPanel {
                 }
 
                 Some(
-                    Tab::new()
-                        .ix(ix)
-                        .tab_bar_prefix(has_extend_dock_button)
+                    Tab::default()
+                        .when(!has_extend_dock_button && ix == 0, |this| {
+                            // Right 1px for avoid border overlap with the first tab
+                            this.right(px(1.))
+                        })
                         .map(|this| {
                             if let Some(tab_name) = panel.tab_name(cx) {
                                 this.child(tab_name)
@@ -875,13 +874,13 @@ impl TabPanel {
                                         Placement::Left => this.left_0().top_0().bottom_0().w(size),
                                         Placement::Right => {
                                             this.right_0().top_0().bottom_0().w(size)
-                                        }
+                                        },
                                         Placement::Top => this.top_0().left_0().right_0().h(size),
                                         Placement::Bottom => {
                                             this.bottom_0().left_0().right_0().h(size)
-                                        }
+                                        },
                                     }
-                                }
+                                },
                                 None => this.top_0().left_0().size_full(),
                             })
                             .group_drag_over::<DragPanel>("", |this| this.visible())
@@ -1056,7 +1055,7 @@ impl TabPanel {
                         window,
                         cx,
                     );
-                }
+                },
                 Placement::Right | Placement::Bottom => {
                     view.add_panel(
                         Arc::new(tab_panel.clone()),
@@ -1066,7 +1065,7 @@ impl TabPanel {
                         cx,
                     );
                     view.add_panel(Arc::new(new_tab_panel), size, dock_area.clone(), window, cx);
-                }
+                },
             });
 
             if stack_panel != new_stack_panel {

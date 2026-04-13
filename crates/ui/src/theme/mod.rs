@@ -1,7 +1,4 @@
-use crate::{
-    highlighter::HighlightTheme, list::ListSettings, notification::NotificationSettings,
-    scroll::ScrollbarShow, sheet::SheetSettings,
-};
+use crate::{highlighter::HighlightTheme, scroll::ScrollbarShow};
 use gpui::{App, Global, Hsla, Pixels, SharedString, Window, WindowAppearance, px};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -24,8 +21,7 @@ pub use theme_color::*;
 pub fn init(cx: &mut App) {
     registry::init(cx);
 
-    // Ensure theme is loaded directly on startup for WASM compatibility
-    Theme::change(ThemeMode::Light, None, cx);
+    Theme::sync_system_appearance(None, cx);
     Theme::sync_scrollbar_appearance(cx);
 }
 
@@ -71,18 +67,12 @@ pub struct Theme {
     pub transparent: Hsla,
     /// Show the scrollbar mode, default: Scrolling
     pub scrollbar_show: ScrollbarShow,
-    /// The notification setting.
-    pub notification: NotificationSettings,
     /// Tile grid size, default is 4px.
     pub tile_grid_size: Pixels,
     /// The shadow of the tile panel.
     pub tile_shadow: bool,
     /// The border radius of the tile panel, default is 0px.
     pub tile_radius: Pixels,
-    /// The list settings.
-    pub list: ListSettings,
-    /// The sheet settings.
-    pub sheet: SheetSettings,
 }
 
 impl Default for Theme {
@@ -179,26 +169,13 @@ impl Theme {
         }
     }
 
-    /// Get the input background color.
-    ///
-    /// For dark, use a transparent color mixed with the input border: `cx.theme().input`,
-    /// otherwise use the `cx.theme().background` color.
-    #[inline]
-    pub fn input_background(&self) -> Hsla {
-        if self.is_dark() {
-            self.input.mix_oklab(self.transparent, 0.3)
-        } else {
-            self.background
-        }
-    }
-
-    /// Get the editor background color, if not set, use the input background color.
+    /// Get the editor background color, if not set, use the theme background color.
     #[inline]
     pub(crate) fn editor_background(&self) -> Hsla {
         self.highlight_theme
             .style
             .editor_background
-            .unwrap_or_else(|| self.input_background())
+            .unwrap_or(self.background)
     }
 }
 
@@ -222,33 +199,19 @@ impl From<&ThemeColor> for Theme {
             radius_lg: px(8.),
             shadow: true,
             scrollbar_show: ScrollbarShow::default(),
-            notification: NotificationSettings::default(),
             tile_grid_size: px(8.),
             tile_shadow: true,
             tile_radius: px(0.),
-            list: ListSettings::default(),
             colors: *colors,
             light_theme: Rc::new(ThemeConfig::default()),
             dark_theme: Rc::new(ThemeConfig::default()),
             highlight_theme: HighlightTheme::default_light(),
-            sheet: SheetSettings::default(),
         }
     }
 }
 
 #[derive(
-    Debug,
-    Clone,
-    Copy,
-    Default,
-    PartialEq,
-    PartialOrd,
-    Eq,
-    Ord,
-    Hash,
-    Serialize,
-    Deserialize,
-    JsonSchema,
+    Debug, Clone, Copy, Default, PartialEq, PartialOrd, Eq, Hash, Serialize, Deserialize, JsonSchema,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum ThemeMode {

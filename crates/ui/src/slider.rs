@@ -1,12 +1,12 @@
 use std::ops::Range;
 
-use crate::{ActiveTheme, AxisExt, ElementExt, StyledExt, h_flex};
+use crate::{ActiveTheme, AxisExt, StyledExt, h_flex};
 use gpui::{
-    Along, App, AppContext as _, Axis, Background, Bounds, Context, Corners, DefiniteLength,
-    DragMoveEvent, Empty, Entity, EntityId, EventEmitter, Hsla, InteractiveElement, IntoElement,
-    IsZero, MouseButton, MouseDownEvent, ParentElement as _, Pixels, Point, Render, RenderOnce,
-    StatefulInteractiveElement as _, StyleRefinement, Styled, Window, div,
-    prelude::FluentBuilder as _, px, relative,
+    Along, App, AppContext as _, Axis, Background, Bounds, Context, Corners, DragMoveEvent, Empty,
+    Entity, EntityId, EventEmitter, Hsla, InteractiveElement, IntoElement, MouseButton,
+    MouseDownEvent, ParentElement as _, Pixels, Point, Render, RenderOnce,
+    StatefulInteractiveElement as _, StyleRefinement, Styled, Window, canvas, div,
+    prelude::FluentBuilder as _, px,
 };
 
 #[derive(Clone)]
@@ -84,7 +84,7 @@ impl SliderValue {
             SliderValue::Single(value) => SliderValue::Single(value.clamp(min, max)),
             SliderValue::Range(start, end) => {
                 SliderValue::Range(start.clamp(min, max), end.clamp(min, max))
-            }
+            },
         }
     }
 
@@ -209,14 +209,8 @@ impl SliderState {
     /// Set the minimum value of the slider, default: 0.0
     pub fn min(mut self, min: f32) -> Self {
         if self.scale.is_logarithmic() {
-            assert!(
-                min > 0.0,
-                "`min` must be greater than 0 for SliderScale::Logarithmic"
-            );
-            assert!(
-                min < self.max,
-                "`min` must be less than `max` for Logarithmic scale"
-            );
+            assert!(min > 0.0, "`min` must be greater than 0 for SliderScale::Logarithmic");
+            assert!(min < self.max, "`min` must be less than `max` for Logarithmic scale");
         }
         self.min = min;
         self.update_thumb_pos();
@@ -226,10 +220,7 @@ impl SliderState {
     /// Set the maximum value of the slider, default: 100.0
     pub fn max(mut self, max: f32) -> Self {
         if self.scale.is_logarithmic() {
-            assert!(
-                max > self.min,
-                "`max` must be greater than `min` for Logarithmic scale"
-            );
+            assert!(max > self.min, "`max` must be greater than `min` for Logarithmic scale");
         }
         self.max = max;
         self.update_thumb_pos();
@@ -245,14 +236,8 @@ impl SliderState {
     /// Set the scale of the slider, default: [`SliderScale::Linear`].
     pub fn scale(mut self, scale: SliderScale) -> Self {
         if scale.is_logarithmic() {
-            assert!(
-                self.min > 0.0,
-                "`min` must be greater than 0 for Logarithmic scale"
-            );
-            assert!(
-                self.max > self.min,
-                "`max` must be greater than `min` for Logarithmic scale"
-            );
+            assert!(self.min > 0.0, "`min` must be greater than 0 for Logarithmic scale");
+            assert!(self.max > self.min, "`max` must be greater than `min` for Logarithmic scale");
         }
         self.scale = scale;
         self.update_thumb_pos();
@@ -294,7 +279,7 @@ impl SliderState {
                 // we clamp just to make sure we don't have issue with floating point precision
                 let base = self.max / self.min;
                 (base.powf(percentage) * self.min).clamp(self.min, self.max)
-            }
+            },
         }
     }
 
@@ -309,11 +294,11 @@ impl SliderState {
                 } else {
                     (value - self.min) / range
                 }
-            }
+            },
             SliderScale::Logarithmic => {
                 let base = self.max / self.min;
                 (value / self.min).log(base).clamp(0.0, 1.0)
-            }
+            },
         }
     }
 
@@ -322,13 +307,13 @@ impl SliderState {
             SliderValue::Single(value) => {
                 let percentage = self.value_to_percentage(value.clamp(self.min, self.max));
                 self.percentage = 0.0..percentage;
-            }
+            },
             SliderValue::Range(start, end) => {
                 let clamped_start = start.clamp(self.min, self.max);
                 let clamped_end = end.clamp(self.min, self.max);
                 self.percentage =
                     self.value_to_percentage(clamped_start)..self.value_to_percentage(clamped_end);
-            }
+            },
         }
     }
 
@@ -374,6 +359,11 @@ impl SliderState {
 }
 
 impl EventEmitter<SliderEvent> for SliderState {}
+impl Render for SliderState {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        Empty
+    }
+}
 
 /// A Slider element.
 #[derive(IntoElement)]
@@ -416,7 +406,7 @@ impl Slider {
     #[allow(clippy::too_many_arguments)]
     fn render_thumb(
         &self,
-        start: DefiniteLength,
+        start_pos: Pixels,
         is_start: bool,
         bar_color: Background,
         thumb_color: Hsla,
@@ -435,12 +425,8 @@ impl Slider {
         div()
             .id(id)
             .absolute()
-            .when(axis.is_horizontal(), |this| {
-                this.top(px(-5.)).left(start).ml(-px(8.))
-            })
-            .when(axis.is_vertical(), |this| {
-                this.bottom(start).left(px(-5.)).mb(-px(8.))
-            })
+            .when(axis.is_horizontal(), |this| this.top(px(-5.)).left(start_pos).ml(-px(8.)))
+            .when(axis.is_vertical(), |this| this.bottom(start_pos).left(px(-5.)).mb(-px(8.)))
             .flex()
             .items_center()
             .justify_center()
@@ -481,7 +467,7 @@ impl Slider {
                                 window,
                                 cx,
                             )
-                        }
+                        },
                     }
                 },
             ))
@@ -500,9 +486,9 @@ impl RenderOnce for Slider {
         let entity_id = self.state.entity_id();
         let state = self.state.read(cx);
         let is_range = state.value().is_range();
-        let percentage = state.percentage.clone();
-        let bar_start = relative(percentage.start);
-        let bar_end = relative(1. - percentage.end);
+        let bar_size = state.bounds.size.along(axis);
+        let bar_start = state.percentage.start * bar_size;
+        let bar_end = state.percentage.end * bar_size;
         let rem_size = window.rem_size();
 
         let bar_color = self
@@ -514,11 +500,12 @@ impl RenderOnce for Slider {
         let thumb_color = self
             .style
             .text
+            .clone()
             .color
             .unwrap_or_else(|| cx.theme().slider_thumb);
         let corner_radii = self.style.corner_radii.clone();
         let default_radius = px(999.);
-        let mut radius = Corners {
+        let radius = Corners {
             top_left: corner_radii
                 .top_left
                 .map(|v| v.to_pixels(rem_size))
@@ -536,12 +523,6 @@ impl RenderOnce for Slider {
                 .map(|v| v.to_pixels(rem_size))
                 .unwrap_or(default_radius),
         };
-        if cx.theme().radius.is_zero() {
-            radius.top_left = px(0.);
-            radius.top_right = px(0.);
-            radius.bottom_left = px(0.);
-            radius.bottom_right = px(0.);
-        }
 
         div()
             .id(("slider", self.state.entity_id()))
@@ -565,15 +546,12 @@ impl RenderOnce for Slider {
                                 move |state, e: &MouseDownEvent, window, cx| {
                                     let mut is_start = false;
                                     if is_range {
-                                        let bar_size = state.bounds.size.along(axis);
                                         let inner_pos = if axis.is_horizontal() {
                                             e.position.x - state.bounds.left()
                                         } else {
                                             state.bounds.bottom() - e.position.y
                                         };
-                                        let center = ((percentage.end - percentage.start) / 2.0
-                                            + percentage.start)
-                                            * bar_size;
+                                        let center = (bar_end - bar_start) / 2.0 + bar_start;
                                         is_start = inner_pos < center;
                                     }
 
@@ -605,16 +583,12 @@ impl RenderOnce for Slider {
                                         window,
                                         cx,
                                     )
-                                }
+                                },
                             },
                         ))
                     })
-                    .when(axis.is_horizontal(), |this| {
-                        this.items_center().h_6().w_full()
-                    })
-                    .when(axis.is_vertical(), |this| {
-                        this.justify_center().w_6().h_full()
-                    })
+                    .when(axis.is_horizontal(), |this| this.items_center().h_6().w_full())
+                    .when(axis.is_vertical(), |this| this.justify_center().w_6().h_full())
                     .flex_shrink_0()
                     .child(
                         div()
@@ -629,17 +603,17 @@ impl RenderOnce for Slider {
                                 div()
                                     .absolute()
                                     .when(axis.is_horizontal(), |this| {
-                                        this.h_full().left(bar_start).right(bar_end)
+                                        this.h_full().left(bar_start).right(bar_size - bar_end)
                                     })
                                     .when(axis.is_vertical(), |this| {
-                                        this.w_full().bottom(bar_start).top(bar_end)
+                                        this.w_full().bottom(bar_start).top(bar_size - bar_end)
                                     })
                                     .bg(bar_color)
-                                    .when(!cx.theme().radius.is_zero(), |this| this.rounded_full()),
+                                    .rounded_full(),
                             )
                             .when(is_range, |this| {
                                 this.child(self.render_thumb(
-                                    relative(percentage.start),
+                                    bar_start,
                                     true,
                                     bar_color,
                                     thumb_color,
@@ -649,7 +623,7 @@ impl RenderOnce for Slider {
                                 ))
                             })
                             .child(self.render_thumb(
-                                relative(percentage.end),
+                                bar_end,
                                 false,
                                 bar_color,
                                 thumb_color,
@@ -657,9 +631,14 @@ impl RenderOnce for Slider {
                                 window,
                                 cx,
                             ))
-                            .on_prepaint({
+                            .child({
                                 let state = self.state.clone();
-                                move |bounds, _, cx| state.update(cx, |r, _| r.bounds = bounds)
+                                canvas(
+                                    move |bounds, _, cx| state.update(cx, |r, _| r.bounds = bounds),
+                                    |_, _, _, _| {},
+                                )
+                                .absolute()
+                                .size_full()
                             }),
                     ),
             )

@@ -204,10 +204,7 @@ impl TextElement {
             ..UnderlineStyle::default()
         });
 
-        Some((
-            editor.hover_definition.symbol_range.clone(),
-            highlight_style,
-        ))
+        Some((editor.hover_definition.symbol_range.clone(), highlight_style))
     }
 
     pub(crate) fn layout_hover_definition_hitbox(

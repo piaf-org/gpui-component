@@ -2,36 +2,7 @@ use std::ops::Range;
 
 use ropey::{LineType, Rope, RopeSlice};
 use sum_tree::Bias;
-
-#[cfg(not(target_family = "wasm"))]
-pub use tree_sitter::{InputEdit, Point};
-
-#[cfg(target_family = "wasm")]
-/// Stub type for tree-sitter Point on WASM (tree-sitter not available).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Point {
-    pub row: usize,
-    pub column: usize,
-}
-
-#[cfg(target_family = "wasm")]
-impl Point {
-    pub fn new(row: usize, column: usize) -> Self {
-        Self { row, column }
-    }
-}
-
-#[cfg(target_family = "wasm")]
-/// Stub type for tree-sitter InputEdit on WASM (tree-sitter not available).
-#[derive(Debug, Clone, Copy)]
-pub struct InputEdit {
-    pub start_byte: usize,
-    pub old_end_byte: usize,
-    pub new_end_byte: usize,
-    pub start_position: Point,
-    pub old_end_position: Point,
-    pub new_end_position: Point,
-}
+use tree_sitter::Point;
 
 use crate::input::Position;
 
@@ -46,11 +17,7 @@ impl<'a> RopeLines<'a> {
     /// Create a new `RopeLines` iterator.
     pub fn new(rope: &'a Rope) -> Self {
         let end_row = rope.lines_len();
-        Self {
-            row: 0,
-            end_row,
-            rope,
-        }
+        Self { row: 0, end_row, rope }
     }
 }
 impl<'a> Iterator for RopeLines<'a> {
@@ -499,10 +466,7 @@ mod tests {
     fn test_lines() {
         let rope = Rope::from("Hello\nWorld\r\nThis is a test 中文\nRope\r");
         let lines: Vec<_> = rope.iter_lines().map(|r| r.to_string()).collect();
-        assert_eq!(
-            lines,
-            vec!["Hello", "World\r", "This is a test 中文", "Rope\r"]
-        );
+        assert_eq!(lines, vec!["Hello", "World\r", "This is a test 中文", "Rope\r"]);
     }
 
     #[test]
@@ -550,23 +514,11 @@ mod tests {
     fn test_line_column() {
         let rope = Rope::from("a 中文🎉 test\nRope");
         assert_eq!(rope.position_to_offset(&Position::new(0, 3)), "a 中".len());
-        assert_eq!(
-            rope.position_to_offset(&Position::new(0, 5)),
-            "a 中文🎉".len()
-        );
-        assert_eq!(
-            rope.position_to_offset(&Position::new(1, 1)),
-            "a 中文🎉 test\nR".len()
-        );
+        assert_eq!(rope.position_to_offset(&Position::new(0, 5)), "a 中文🎉".len());
+        assert_eq!(rope.position_to_offset(&Position::new(1, 1)), "a 中文🎉 test\nR".len());
 
-        assert_eq!(
-            rope.offset_to_position("a 中文🎉 test\nR".len()),
-            Position::new(1, 1)
-        );
-        assert_eq!(
-            rope.offset_to_position("a 中文🎉".len()),
-            Position::new(0, 5)
-        );
+        assert_eq!(rope.offset_to_position("a 中文🎉 test\nR".len()), Position::new(1, 1));
+        assert_eq!(rope.offset_to_position("a 中文🎉".len()), Position::new(0, 5));
     }
 
     #[test]
@@ -576,10 +528,7 @@ mod tests {
         assert_eq!(rope.offset_to_point(1), Point::new(0, 1));
         assert_eq!(rope.offset_to_point("a 中".len()), Point::new(0, 5));
         assert_eq!(rope.offset_to_point("a 中文🎉".len()), Point::new(0, 12));
-        assert_eq!(
-            rope.offset_to_point("a 中文🎉 test\nR".len()),
-            Point::new(1, 1)
-        );
+        assert_eq!(rope.offset_to_point("a 中文🎉 test\nR".len()), Point::new(1, 1));
     }
 
     #[test]
@@ -589,10 +538,7 @@ mod tests {
         assert_eq!(rope.point_to_offset(Point::new(0, 1)), 1);
         assert_eq!(rope.point_to_offset(Point::new(0, 5)), "a 中".len());
         assert_eq!(rope.point_to_offset(Point::new(0, 12)), "a 中文🎉".len());
-        assert_eq!(
-            rope.point_to_offset(Point::new(1, 1)),
-            "a 中文🎉 test\nR".len()
-        );
+        assert_eq!(rope.point_to_offset(Point::new(1, 1)), "a 中文🎉 test\nR".len());
     }
 
     #[test]
@@ -647,22 +593,13 @@ mod tests {
     fn test_replace() {
         let mut rope = Rope::from("Hello\nWorld\r\nThis is a test 中文\nRope");
         rope.replace(6..11, "Universe");
-        assert_eq!(
-            rope.to_string(),
-            "Hello\nUniverse\r\nThis is a test 中文\nRope"
-        );
+        assert_eq!(rope.to_string(), "Hello\nUniverse\r\nThis is a test 中文\nRope");
 
         rope.replace(0..5, "Hi");
-        assert_eq!(
-            rope.to_string(),
-            "Hi\nUniverse\r\nThis is a test 中文\nRope"
-        );
+        assert_eq!(rope.to_string(), "Hi\nUniverse\r\nThis is a test 中文\nRope");
 
         rope.replace(rope.len() - 4..rope.len(), "String");
-        assert_eq!(
-            rope.to_string(),
-            "Hi\nUniverse\r\nThis is a test 中文\nString"
-        );
+        assert_eq!(rope.to_string(), "Hi\nUniverse\r\nThis is a test 中文\nString");
 
         // Test for not on a char boundary
         let mut rope = Rope::from("中文");

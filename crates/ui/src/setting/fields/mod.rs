@@ -195,11 +195,9 @@ impl SettingField<SharedString> {
         E: IntoElement + 'static,
         R: Fn(&RenderOptions, &mut Window, &mut App) -> E + 'static,
     {
-        Self::element(
-            move |options: &RenderOptions, window: &mut Window, cx: &mut App| {
-                (element_render)(options, window, cx).into_any_element()
-            },
-        )
+        Self::element(move |options: &RenderOptions, window: &mut Window, cx: &mut App| {
+            (element_render)(options, window, cx).into_any_element()
+        })
     }
 }
 

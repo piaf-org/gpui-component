@@ -8,14 +8,13 @@ use std::{
 use gpui::{
     Animation, AnimationExt, AnyElement, App, AppContext, ClickEvent, Context, DismissEvent,
     ElementId, Entity, EventEmitter, InteractiveElement as _, IntoElement, ParentElement as _,
-    Pixels, Render, SharedString, StatefulInteractiveElement, StyleRefinement, Styled,
-    Subscription, Window, div, prelude::FluentBuilder, px,
+    Render, SharedString, StatefulInteractiveElement, StyleRefinement, Styled, Subscription,
+    Window, div, prelude::FluentBuilder, px,
 };
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use smol::Timer;
 
 use crate::{
-    ActiveTheme as _, Anchor, Edges, Icon, IconName, Sizable as _, StyledExt, TITLE_BAR_HEIGHT,
+    ActiveTheme as _, Icon, IconName, Sizable as _, StyledExt,
     animation::cubic_bezier,
     button::{Button, ButtonVariants as _},
     h_flex, v_flex,
@@ -222,14 +221,11 @@ impl Notification {
     }
 
     /// Set the action button of the notification.
-    ///
-    /// When an action is set, the notification will not autohide.
     pub fn action<F>(mut self, action: F) -> Self
     where
         F: Fn(&mut Self, &mut Window, &mut Context<Self>) -> Button + 'static,
     {
         self.action_builder = Some(Rc::new(action));
-        self.autohide = false;
         self
     }
 
@@ -243,7 +239,7 @@ impl Notification {
 
         // Dismiss the notification after 0.15s to show the animation.
         cx.spawn(async move |view, cx| {
-            cx.background_executor().timer(Duration::from_secs_f32(0.15)).await;
+            Timer::after(Duration::from_secs_f32(0.15)).await;
             cx.update(|cx| {
                 if let Some(view) = view.upgrade() {
                     view.update(cx, |view, cx| {
@@ -253,7 +249,7 @@ impl Notification {
                 }
             })
         })
-        .detach();
+        .detach()
     }
 
     /// Set the content of the notification.
@@ -289,7 +285,6 @@ impl Render for Notification {
             Some(type_) => Some(type_.icon(cx)),
         };
         let has_icon = icon.is_some();
-        let placement = cx.theme().notification.placement;
 
         h_flex()
             .id("notification")
@@ -323,11 +318,17 @@ impl Render for Notification {
                     .when_some(content, |this, content| this.child(content)),
             )
             .when_some(action, |this, action| this.child(action))
+            .when_some(self.on_click.clone(), |this, on_click| {
+                this.on_click(cx.listener(move |view, event, window, cx| {
+                    view.dismiss(window, cx);
+                    on_click(event, window, cx);
+                }))
+            })
             .child(
-                div()
+                h_flex()
                     .absolute()
-                    .top_1()
-                    .right_1()
+                    .top_3p5()
+                    .right_3p5()
                     .invisible()
                     .group_hover("", |this| this.visible())
                     .child(
@@ -338,52 +339,20 @@ impl Render for Notification {
                             .on_click(cx.listener(|this, _, window, cx| this.dismiss(window, cx))),
                     ),
             )
-            .when_some(self.on_click.clone(), |this, on_click| {
-                this.on_click(cx.listener(move |view, event, window, cx| {
-                    view.dismiss(window, cx);
-                    on_click(event, window, cx);
-                }))
-            })
-            .on_aux_click(cx.listener(move |view, event: &ClickEvent, window, cx| {
-                if event.is_middle_click() {
-                    view.dismiss(window, cx);
-                }
-            }))
             .with_animation(
                 ElementId::NamedInteger("slide-down".into(), closing as u64),
                 Animation::new(Duration::from_secs_f64(0.25))
                     .with_easing(cubic_bezier(0.4, 0., 0.2, 1.)),
                 move |this, delta| {
                     if closing {
+                        let x_offset = px(0.) + delta * px(45.);
                         let opacity = 1. - delta;
-                        let that = this
+                        this.left(px(0.) + x_offset)
                             .shadow_none()
                             .opacity(opacity)
-                            .when(opacity < 0.85, |this| this.shadow_none());
-                        match placement {
-                            Anchor::TopRight | Anchor::BottomRight => {
-                                let x_offset = px(0.) + delta * px(45.);
-                                that.left(px(0.) + x_offset)
-                            }
-                            Anchor::TopLeft | Anchor::BottomLeft => {
-                                let x_offset = px(0.) - delta * px(45.);
-                                that.left(px(0.) + x_offset)
-                            }
-                            Anchor::TopCenter => {
-                                let y_offset = px(0.) - delta * px(45.);
-                                that.top(px(0.) + y_offset)
-                            }
-                            Anchor::BottomCenter => {
-                                let y_offset = px(0.) + delta * px(45.);
-                                that.top(px(0.) + y_offset)
-                            }
-                        }
+                            .when(opacity < 0.85, |this| this.shadow_none())
                     } else {
-                        let y_offset = match placement {
-                            placement if placement.is_top() => px(-45.) + delta * px(45.),
-                            placement if placement.is_bottom() => px(45.) - delta * px(45.),
-                            _ => px(0.),
-                        };
+                        let y_offset = px(-45.) + delta * px(45.);
                         let opacity = delta;
                         this.top(px(0.) + y_offset)
                             .opacity(opacity)
@@ -391,33 +360,6 @@ impl Render for Notification {
                     }
                 },
             )
-    }
-}
-
-/// The settings for notifications.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct NotificationSettings {
-    /// The placement of the notification, default: [`Anchor::TopRight`]
-    pub placement: Anchor,
-    /// The margins of the notification with respect to the window edges.
-    pub margins: Edges<Pixels>,
-    /// The maximum number of notifications to show at once, default: 10
-    pub max_items: usize,
-}
-
-impl Default for NotificationSettings {
-    fn default() -> Self {
-        let offset = px(16.);
-        Self {
-            placement: Anchor::TopRight,
-            margins: Edges {
-                top: TITLE_BAR_HEIGHT + offset, // avoid overlap with title bar
-                right: offset,
-                bottom: offset,
-                left: offset,
-            },
-            max_items: 10,
-        }
     }
 }
 
@@ -465,7 +407,7 @@ impl NotificationList {
         if autohide {
             // Sleep for 5 seconds to autohide the notification
             cx.spawn_in(window, async move |_, cx| {
-                cx.background_executor().timer(Duration::from_secs(5)).await;
+                Timer::after(Duration::from_secs(5)).await;
 
                 if let Err(err) =
                     notification.update_in(cx, |note, window, cx| note.dismiss(window, cx))
@@ -510,38 +452,16 @@ impl Render for NotificationList {
         let size = window.viewport_size();
         let items = self.notifications.iter().rev().take(10).rev().cloned();
 
-        let placement = cx.theme().notification.placement;
-        let margins = &cx.theme().notification.margins;
-
-        v_flex()
-            .id("notification-list")
-            .max_h(size.height)
-            .pt(margins.top)
-            .pb(margins.bottom)
-            .gap_3()
-            .when(
-                matches!(placement, Anchor::TopRight),
-                |this| this.pr(margins.right), // ignore left
-            )
-            .when(
-                matches!(placement, Anchor::TopLeft),
-                |this| this.pl(margins.left), // ignore right
-            )
-            .when(
-                matches!(placement, Anchor::BottomLeft),
-                |this| this.flex_col_reverse().pl(margins.left), // ignore right
-            )
-            .when(
-                matches!(placement, Anchor::BottomRight),
-                |this| this.flex_col_reverse().pr(margins.right), // ignore left
-            )
-            .when(matches!(placement, Anchor::BottomCenter), |this| {
-                this.flex_col_reverse()
-            })
-            .on_hover(cx.listener(|view, hovered, _, cx| {
-                view.expanded = *hovered;
-                cx.notify()
-            }))
-            .children(items)
+        div().absolute().top_4().right_4().child(
+            v_flex()
+                .id("notification-list")
+                .h(size.height - px(8.))
+                .on_hover(cx.listener(|view, hovered, _, cx| {
+                    view.expanded = *hovered;
+                    cx.notify()
+                }))
+                .gap_3()
+                .children(items),
+        )
     }
 }

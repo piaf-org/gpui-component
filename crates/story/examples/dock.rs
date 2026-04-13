@@ -12,7 +12,7 @@ use gpui_component_story::{
     AccordionStory, AppState, AppTitleBar, ButtonStory, CalendarStory, DialogStory, FormStory,
     IconStory, ImageStory, InputStory, LabelStory, ListStory, NotificationStory, Open,
     PopoverStory, ProgressStory, ResizableStory, ScrollbarStory, SelectStory, SidebarStory,
-    StoryContainer, SwitchStory, DataTableStory, TooltipStory,
+    StoryContainer, SwitchStory, TableStory, TooltipStory, WebViewStory,
 };
 use serde::Deserialize;
 use std::{sync::Arc, time::Duration};
@@ -183,10 +183,7 @@ impl StoryWorkspace {
     ) {
         let dock_area = dock_area.clone();
         self._save_layout_task = Some(cx.spawn_in(window, async move |story, window| {
-            window
-                .background_executor()
-                .timer(Duration::from_secs(10))
-                .await;
+            Timer::after(Duration::from_secs(10)).await;
 
             _ = story.update_in(window, move |this, _, cx| {
                 let dock_area = dock_area.read(cx);
@@ -347,7 +344,7 @@ impl StoryWorkspace {
                     Arc::new(StoryContainer::panel::<PopoverStory>(window, cx)),
                     Arc::new(StoryContainer::panel::<SwitchStory>(window, cx)),
                     Arc::new(StoryContainer::panel::<ProgressStory>(window, cx)),
-                    Arc::new(StoryContainer::panel::<DataTableStory>(window, cx)),
+                    Arc::new(StoryContainer::panel::<TableStory>(window, cx)),
                     Arc::new(StoryContainer::panel::<ImageStory>(window, cx)),
                     Arc::new(StoryContainer::panel::<IconStory>(window, cx)),
                     Arc::new(StoryContainer::panel::<TooltipStory>(window, cx)),
@@ -433,7 +430,7 @@ impl StoryWorkspace {
             5 => Arc::new(StoryContainer::panel::<PopoverStory>(window, cx)),
             6 => Arc::new(StoryContainer::panel::<SwitchStory>(window, cx)),
             7 => Arc::new(StoryContainer::panel::<ProgressStory>(window, cx)),
-            8 => Arc::new(StoryContainer::panel::<DataTableStory>(window, cx)),
+            8 => Arc::new(StoryContainer::panel::<TableStory>(window, cx)),
             9 => Arc::new(StoryContainer::panel::<ImageStory>(window, cx)),
             10 => Arc::new(StoryContainer::panel::<IconStory>(window, cx)),
             11 => Arc::new(StoryContainer::panel::<TooltipStory>(window, cx)),
@@ -442,6 +439,7 @@ impl StoryWorkspace {
             14 => Arc::new(StoryContainer::panel::<ResizableStory>(window, cx)),
             15 => Arc::new(StoryContainer::panel::<ScrollbarStory>(window, cx)),
             16 => Arc::new(StoryContainer::panel::<AccordionStory>(window, cx)),
+            17 => Arc::new(StoryContainer::panel::<WebViewStory>(window, cx)),
             _ => Arc::new(StoryContainer::panel::<ButtonStory>(window, cx)),
         };
 
@@ -521,7 +519,7 @@ impl Render for StoryWorkspace {
 }
 
 fn main() {
-    let app = gpui_platform::application().with_assets(Assets);
+    let app = Application::new().with_assets(Assets);
 
     app.run(move |cx| {
         init(cx);

@@ -17,10 +17,10 @@ The [gpui-component-assets] crate provides a default bundled assets implementati
 
 To use the default bundled assets, you need to add the `gpui-component-assets` crate as a dependency in your `Cargo.toml`:
 
-```toml
+```toml-vue
 [dependencies]
-gpui-component = { git = "https://github.com/longbridge/gpui-component" }
-gpui-component-assets = { git = "https://github.com/longbridge/gpui-component" }
+gpui-component = "{{ VERSION }}"
+gpui-component-assets = "{{ VERSION }}"
 ```
 
 Then we need call the `with_assets` method when creating the GPUI application to register the asset source:
@@ -29,7 +29,7 @@ Then we need call the `with_assets` method when creating the GPUI application to
 use gpui::*;
 use gpui_component_assets::Assets;
 
-let app = gpui_platform::application().with_assets(Assets);
+let app = Application::new().with_assets(Assets);
 ```
 
 Now, we can use `IconName` and `Icon` in our application as usual, the all icon assets are loaded from the default bundled assets.
@@ -87,7 +87,7 @@ We need call the `with_assets` method when creating the GPUI application to regi
 ```rs
 fn main() {
     // Register Assets to GPUI application.
-    let app = gpui_platform::application().with_assets(Assets);
+    let app = Application::new().with_assets(Assets);
 
     app.run(move |cx| {
         // We must initialize gpui_component before using it.
@@ -98,8 +98,9 @@ fn main() {
                 let view = cx.new(|_| Example);
                 // The first level on the window must be Root.
                 cx.new(|cx| Root::new(view, window, cx))
-            })
-            .expect("Failed to open window");
+            })?;
+
+            Ok::<_, anyhow::Error>(())
         })
         .detach();
     });

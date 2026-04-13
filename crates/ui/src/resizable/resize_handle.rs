@@ -1,12 +1,12 @@
 use std::{cell::Cell, rc::Rc};
 
 use gpui::{
-    div, prelude::FluentBuilder as _, px, AnyElement, App, Axis, Element, ElementId, Entity,
-    GlobalElementId, InteractiveElement, IntoElement, MouseDownEvent, MouseUpEvent,
-    ParentElement as _, Pixels, Point, Render, StatefulInteractiveElement, Styled as _, Window,
+    AnyElement, App, Axis, Element, ElementId, Entity, GlobalElementId, InteractiveElement,
+    IntoElement, MouseDownEvent, MouseUpEvent, ParentElement as _, Pixels, Point, Render,
+    StatefulInteractiveElement, Styled as _, Window, div, prelude::FluentBuilder as _, px,
 };
 
-use crate::{dock::DockPlacement, ActiveTheme as _, AxisExt as _};
+use crate::{ActiveTheme as _, AxisExt as _, dock::DockPlacement};
 
 pub(crate) const HANDLE_PADDING: Pixels = px(4.);
 pub(crate) const HANDLE_SIZE: Pixels = px(1.);
@@ -46,9 +46,7 @@ impl<T: 'static, E: 'static + Render> ResizeHandle<T, E> {
     ) -> Self {
         let value = Rc::new(value);
         self.drag_value = Some(value.clone());
-        self.on_drag = Some(Rc::new(move |p, window, cx| {
-            f(value.clone(), p, window, cx)
-        }));
+        self.on_drag = Some(Rc::new(move |p, window, cx| f(value.clone(), p, window, cx)));
         self
     }
 
@@ -133,7 +131,7 @@ impl<T: 'static, E: 'static + Render> Element for ResizeHandle<T, E> {
                             .h_full()
                             .w(HANDLE_SIZE)
                             .pl(HANDLE_PADDING)
-                    }
+                    },
                     _ => this
                         .when(axis.is_horizontal(), |this| {
                             this.cursor_col_resize()

@@ -4,7 +4,7 @@ description = "Macros for GPUI Component."
 version = "0.5.1"
 license = "Apache-2.0"
 publish = true
-edition.workspace = true
+edition = "2024"
 
 [lib]
 proc-macro = true

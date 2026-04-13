@@ -10,14 +10,12 @@ order: -2
 
 Add dependencies to your `Cargo.toml`:
 
-```toml
+```toml-vue
 [dependencies]
-gpui = { git = "https://github.com/zed-industries/zed" }
-gpui_platform = { git = "https://github.com/zed-industries/zed" }
-gpui-component = { git = "https://github.com/longbridge/gpui-component" }
+gpui = "{{ GPUI_VERSION }}"
+gpui-component = "{{ VERSION }}"
 # Optional, for default bundled assets
-gpui-component-assets = { git = "https://github.com/longbridge/gpui-component" }
-anyhow = "1.0"
+gpui-component-assets = "{{ VERSION }}"
 ```
 
 :::tip
@@ -57,7 +55,7 @@ impl Render for HelloWorld {
 }
 
 fn main() {
-    let app = gpui_platform::application().with_assets(gpui_component_assets::Assets);
+    let app = Application::new().with_assets(gpui_component_assets::Assets);
 
     app.run(move |cx| {
         // This must be called before using any GPUI Component features.
@@ -68,8 +66,9 @@ fn main() {
                 let view = cx.new(|_| HelloWorld);
                 // This first level on the window, should be a Root.
                 cx.new(|cx| Root::new(view, window, cx))
-            })
-            .expect("Failed to open window");
+            })?;
+
+            Ok::<_, anyhow::Error>(())
         })
         .detach();
     });
@@ -192,7 +191,7 @@ Explore the component documentation to learn more about each component:
 - [Button](./components/button) - Interactive button component
 - [Input](./components/input) - Text input with validation
 - [Dialog](./components/dialog) - Dialog and modal windows
-- [DataTable](./components/data-table) - High-performance data tables
+- [Table](./components/table) - High-performance data tables
 - [More components...](./components/index)
 
 ## Development

@@ -1,12 +1,12 @@
 use std::rc::Rc;
 
 use gpui::{
-    div, prelude::FluentBuilder as _, App, ClickEvent, ElementId, InteractiveElement as _,
-    IntoElement, ParentElement, RenderOnce, SharedString, StatefulInteractiveElement,
-    StyleRefinement, Styled, Window,
+    App, ClickEvent, ElementId, InteractiveElement as _, IntoElement, ParentElement, RenderOnce,
+    SharedString, StatefulInteractiveElement, StyleRefinement, Styled, Window, div,
+    prelude::FluentBuilder as _,
 };
 
-use crate::{h_flex, ActiveTheme, Icon, IconName, StyledExt};
+use crate::{ActiveTheme, Icon, IconName, StyledExt, h_flex};
 
 /// A breadcrumb navigation element.
 #[derive(IntoElement)]
@@ -95,9 +95,7 @@ impl RenderOnce for BreadcrumbItem {
             .child(self.label)
             .text_color(cx.theme().muted_foreground)
             .when(self.is_last, |this| this.text_color(cx.theme().foreground))
-            .when(self.disabled, |this| {
-                this.text_color(cx.theme().muted_foreground)
-            })
+            .when(self.disabled, |this| this.text_color(cx.theme().muted_foreground))
             .refine_style(&self.style)
             .when(!self.disabled, |this| {
                 this.when_some(self.on_click, |this, on_click| {

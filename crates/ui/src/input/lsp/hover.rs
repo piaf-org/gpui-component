@@ -1,9 +1,10 @@
-use instant::Duration;
+use std::time::Duration;
+
 use anyhow::Result;
 use gpui::{App, Context, Task, Window};
 use ropey::Rope;
 
-use crate::input::{popovers::HoverPopover, InputState, RopeExt};
+use crate::input::{InputState, RopeExt, popovers::HoverPopover};
 
 /// Hover provider
 ///
@@ -66,10 +67,10 @@ impl InputState {
                     }
                     let hover_popover = HoverPopover::new(cx.entity(), symbol_range, &hover, cx);
                     editor.hover_popover = Some(hover_popover);
-                }
+                },
                 None => {
                     editor.hover_popover = None;
-                }
+                },
             });
 
             Ok(())

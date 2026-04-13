@@ -2,18 +2,17 @@ use gpui::{
     AnyElement, App, AppContext, Bounds, ClickEvent, Context, DismissEvent, Edges, ElementId,
     Entity, EventEmitter, FocusHandle, Focusable, InteractiveElement, IntoElement, KeyBinding,
     Length, ParentElement, Pixels, Render, RenderOnce, SharedString, StatefulInteractiveElement,
-    StyleRefinement, Styled, Subscription, Task, WeakEntity, Window, anchored, deferred, div,
-    prelude::FluentBuilder, px, rems,
+    StyleRefinement, Styled, Subscription, Task, WeakEntity, Window, anchored, canvas, deferred,
+    div, prelude::FluentBuilder, px, rems,
 };
 use rust_i18n::t;
 
 use crate::{
-    ActiveTheme, Disableable, ElementExt as _, Icon, IconName, IndexPath, Selectable, Sizable,
-    Size, StyleSized, StyledExt,
+    ActiveTheme, Disableable, Icon, IconName, IndexPath, Selectable, Sizable, Size, StyleSized,
+    StyledExt,
     actions::{Cancel, Confirm, SelectDown, SelectUp},
-    global_state::GlobalState,
     h_flex,
-    input::{clear_button, input_style},
+    input::clear_button,
     list::{List, ListDelegate, ListState},
     v_flex,
 };
@@ -24,11 +23,7 @@ pub(crate) fn init(cx: &mut App) {
         KeyBinding::new("up", SelectUp, Some(CONTEXT)),
         KeyBinding::new("down", SelectDown, Some(CONTEXT)),
         KeyBinding::new("enter", Confirm { secondary: false }, Some(CONTEXT)),
-        KeyBinding::new(
-            "secondary-enter",
-            Confirm { secondary: true },
-            Some(CONTEXT),
-        ),
+        KeyBinding::new("secondary-enter", Confirm { secondary: true }, Some(CONTEXT)),
         KeyBinding::new("escape", Cancel, Some(CONTEXT)),
     ])
 }
@@ -236,7 +231,7 @@ where
             }
 
             _ = state.update(cx, |this, cx| {
-                this.set_open(false, cx);
+                this.open = false;
                 this.focus(window, cx);
             });
         });
@@ -254,7 +249,7 @@ where
                 cx.emit(SelectEvent::Confirm(selected_value.clone()));
                 this.final_selected_index = selected_index;
                 this.selected_value = selected_value;
-                this.set_open(false, cx);
+                this.open = false;
                 this.focus(window, cx);
             });
         });
@@ -317,7 +312,6 @@ struct SelectOptions {
     search_placeholder: Option<SharedString>,
     empty: Option<AnyElement>,
     menu_width: Length,
-    menu_max_h: Length,
     disabled: bool,
     appearance: bool,
 }
@@ -333,7 +327,6 @@ impl Default for SelectOptions {
             title_prefix: None,
             empty: None,
             menu_width: Length::Auto,
-            menu_max_h: rems(20.).into(),
             disabled: false,
             appearance: true,
             search_placeholder: None,
@@ -431,7 +424,7 @@ impl<I: SelectItem> SelectDelegate for SearchableVec<I> {
         self.matched_items = self
             .items
             .iter()
-            .filter(|item| item.matches(query))
+            .filter(|item| item.title().to_lowercase().contains(&query.to_lowercase()))
             .cloned()
             .collect();
 
@@ -673,13 +666,13 @@ where
             });
         }
 
-        self.set_open(false, cx);
+        self.open = false;
         cx.notify();
     }
 
     fn up(&mut self, _: &SelectUp, window: &mut Window, cx: &mut Context<Self>) {
         if !self.open {
-            self.set_open(true, cx);
+            self.open = true;
         }
 
         self.list.focus_handle(cx).focus(window, cx);
@@ -688,7 +681,7 @@ where
 
     fn down(&mut self, _: &SelectDown, window: &mut Window, cx: &mut Context<Self>) {
         if !self.open {
-            self.set_open(true, cx);
+            self.open = true;
         }
 
         self.list.focus_handle(cx).focus(window, cx);
@@ -700,7 +693,7 @@ where
         cx.propagate();
 
         if !self.open {
-            self.set_open(true, cx);
+            self.open = true;
             cx.notify();
         }
 
@@ -710,32 +703,19 @@ where
     fn toggle_menu(&mut self, _: &ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
         cx.stop_propagation();
 
-        self.set_open(!self.open, cx);
+        self.open = !self.open;
         if self.open {
             self.list.focus_handle(cx).focus(window, cx);
         }
         cx.notify();
     }
 
-    fn escape(&mut self, _: &Cancel, window: &mut Window, cx: &mut Context<Self>) {
+    fn escape(&mut self, _: &Cancel, _: &mut Window, cx: &mut Context<Self>) {
         if !self.open {
             cx.propagate();
-            return;
         }
 
-        cx.stop_propagation();
-        self.set_open(false, cx);
-        self.focus(window, cx);
-        cx.notify();
-    }
-
-    fn set_open(&mut self, open: bool, cx: &mut Context<Self>) {
-        self.open = open;
-        if self.open {
-            GlobalState::global_mut(cx).register_deferred_popover(&self.focus_handle)
-        } else {
-            GlobalState::global_mut(cx).unregister_deferred_popover(&self.focus_handle)
-        }
+        self.open = false;
         cx.notify();
     }
 
@@ -747,12 +727,15 @@ where
 
     /// Returns the title element for the select input.
     fn display_title(&mut self, _: &Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let default_title = div().text_color(cx.theme().muted_foreground).child(
-            self.options
-                .placeholder
-                .clone()
-                .unwrap_or_else(|| t!("Select.placeholder").into()),
-        );
+        let default_title = div()
+            .text_color(cx.theme().accent_foreground)
+            .child(
+                self.options
+                    .placeholder
+                    .clone()
+                    .unwrap_or_else(|| t!("Select.placeholder").into()),
+            )
+            .when(self.options.disabled, |this| this.text_color(cx.theme().muted_foreground));
 
         let Some(selected_index) = &self.selected_index(cx) else {
             return default_title;
@@ -780,9 +763,7 @@ where
         };
 
         div()
-            .when(self.options.disabled, |this| {
-                this.text_color(cx.theme().muted_foreground)
-            })
+            .when(self.options.disabled, |this| this.text_color(cx.theme().muted_foreground))
             .child(title)
     }
 }
@@ -800,8 +781,6 @@ where
         let outline_visible = self.open || is_focused && !self.options.disabled;
         let popup_radius = cx.theme().radius.min(px(8.));
 
-        let (bg, fg) = input_style(self.options.disabled, cx);
-
         self.list
             .update(cx, |list, cx| list.set_searchable(searchable, cx));
 
@@ -818,9 +797,7 @@ where
                     .border_1()
                     .border_color(cx.theme().transparent)
                     .when(self.options.appearance, |this| {
-                        this.bg(bg)
-                            .text_color(fg)
-                            .when(self.options.disabled, |this| this.opacity(0.5))
+                        this.bg(cx.theme().background)
                             .border_color(cx.theme().input)
                             .rounded(cx.theme().radius)
                             .when(cx.theme().shadow, |this| this.shadow_xs())
@@ -837,9 +814,7 @@ where
                     .input_text_size(self.options.size)
                     .refine_style(&self.options.style)
                     .when(outline_visible, |this| this.focused_border(cx))
-                    .when(allow_open, |this| {
-                        this.on_click(cx.listener(Self::toggle_menu))
-                    })
+                    .when(allow_open, |this| this.on_click(cx.listener(Self::toggle_menu)))
                     .child(
                         h_flex()
                             .id("inner")
@@ -871,13 +846,23 @@ where
                                     None => Icon::new(IconName::ChevronDown),
                                 };
 
-                                this.child(icon.xsmall().text_color(cx.theme().muted_foreground))
+                                this.child(icon.xsmall().text_color(match self.options.disabled {
+                                    true => cx.theme().muted_foreground.opacity(0.5),
+                                    false => cx.theme().muted_foreground,
+                                }))
                             }),
                     )
-                    .on_prepaint({
-                        let state = cx.entity();
-                        move |bounds, _, cx| state.update(cx, |r, _| r.bounds = bounds)
-                    }),
+                    .child(
+                        canvas(
+                            {
+                                let state = cx.entity();
+                                move |bounds, _, cx| state.update(cx, |r, _| r.bounds = bounds)
+                            },
+                            |_, _, _, _| {},
+                        )
+                        .absolute()
+                        .size_full(),
+                    ),
             )
             .when(self.open, |this| {
                 this.child(
@@ -907,7 +892,7 @@ where
                                                     },
                                                 )
                                                 .with_size(self.options.size)
-                                                .max_h(self.options.menu_max_h)
+                                                .max_h(rems(20.))
                                                 .paddings(Edges::all(px(4.))),
                                         ),
                                 )
@@ -937,12 +922,6 @@ where
     /// Set the width of the dropdown menu, default: Length::Auto
     pub fn menu_width(mut self, width: impl Into<Length>) -> Self {
         self.options.menu_width = width.into();
-        self
-    }
-
-    /// Set the max height of the dropdown menu, default: 20rem
-    pub fn menu_max_h(mut self, max_h: impl Into<Length>) -> Self {
-        self.options.menu_max_h = max_h.into();
         self
     }
 
@@ -1048,9 +1027,7 @@ where
         div()
             .id(self.id.clone())
             .key_context(CONTEXT)
-            .when(!disabled, |this| {
-                this.track_focus(&focus_handle.tab_stop(true))
-            })
+            .when(!disabled, |this| this.track_focus(&focus_handle.tab_stop(true)))
             .on_action(window.listener_for(&self.state, SelectState::up))
             .on_action(window.listener_for(&self.state, SelectState::down))
             .on_action(window.listener_for(&self.state, SelectState::enter))
@@ -1143,9 +1120,7 @@ impl RenderOnce for SelectListItem {
                 })
             })
             .when(self.selected, |this| this.bg(cx.theme().accent))
-            .when(self.disabled, |this| {
-                this.text_color(cx.theme().muted_foreground)
-            })
+            .when(self.disabled, |this| this.text_color(cx.theme().muted_foreground))
             .child(
                 h_flex()
                     .w_full()

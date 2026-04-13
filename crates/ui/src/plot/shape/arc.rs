@@ -4,6 +4,8 @@ use std::{f32::consts::PI, fmt::Debug};
 
 use gpui::{Bounds, Hsla, Path, PathBuilder, Pixels, Point, Window, point, px};
 
+use crate::PixelsExt;
+
 const EPSILON: f32 = 1e-12;
 const HALF_PI: f32 = PI / 2.;
 
@@ -113,12 +115,7 @@ impl Arc {
             )
         } else {
             let pad = pad_angle * 0.5;
-            (
-                start_angle + pad,
-                end_angle - pad,
-                start_angle + pad,
-                end_angle - pad,
-            )
+            (start_angle + pad, end_angle - pad, start_angle + pad, end_angle - pad)
         };
 
         let da_outer = a1_outer - a0_outer;
@@ -139,13 +136,7 @@ impl Arc {
 
         // Draw the outer arc.
         let large_arc = (a1_outer - a0_outer).abs() > PI;
-        builder.arc_to(
-            point(px(r1), px(r1)),
-            px(0.),
-            large_arc,
-            true,
-            point(px(x11), px(y11)),
-        );
+        builder.arc_to(point(px(r1), px(r1)), px(0.), large_arc, true, point(px(x11), px(y11)));
 
         if r0 > EPSILON {
             // End point of the inner arc.

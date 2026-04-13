@@ -1,4 +1,4 @@
-use gpui::{px, Bounds, Hsla, PathBuilder, Pixels, Point, Window};
+use gpui::{Bounds, Hsla, PathBuilder, Pixels, Point, Window, px};
 
 use super::origin_point;
 
@@ -51,23 +51,13 @@ impl Grid {
         let mut x = self
             .x
             .iter()
-            .map(|x| {
-                (
-                    origin_point(*x, px(0.), origin),
-                    origin_point(*x, size.height, origin),
-                )
-            })
+            .map(|x| (origin_point(*x, px(0.), origin), origin_point(*x, size.height, origin)))
             .collect::<Vec<_>>();
 
         let y = self
             .y
             .iter()
-            .map(|y| {
-                (
-                    origin_point(px(0.), *y, origin),
-                    origin_point(size.width, *y, origin),
-                )
-            })
+            .map(|y| (origin_point(px(0.), *y, origin), origin_point(size.width, *y, origin)))
             .collect::<Vec<_>>();
 
         x.extend(y);

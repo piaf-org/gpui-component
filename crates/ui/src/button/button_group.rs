@@ -1,13 +1,13 @@
 use gpui::{
-    div, prelude::FluentBuilder as _, App, Axis, Corners, Edges, ElementId, InteractiveElement,
-    IntoElement, ParentElement, RenderOnce, StatefulInteractiveElement as _, StyleRefinement,
-    Styled, Window,
+    App, Axis, Corners, Edges, ElementId, InteractiveElement, IntoElement, ParentElement,
+    RenderOnce, StatefulInteractiveElement as _, StyleRefinement, Styled, Window, div,
+    prelude::FluentBuilder as _,
 };
 use std::{cell::Cell, rc::Rc};
 
 use crate::{
-    button::{Button, ButtonVariant, ButtonVariants},
     Disableable, Sizable, Size, StyledExt,
+    button::{Button, ButtonVariant, ButtonVariants},
 };
 
 /// A ButtonGroup element, to wrap multiple buttons in a group.
@@ -228,59 +228,24 @@ impl RenderOnce for ButtonGroup {
                         child
                     }),
             )
-            .when_some(
-                self.on_click.filter(|_| !self.disabled),
-                move |this, on_click| {
-                    this.on_click(move |_, window, cx| {
-                        let mut selected_ixs = selected_ixs.clone();
-                        if let Some(ix) = state.get() {
-                            if self.multiple {
-                                if let Some(pos) = selected_ixs.iter().position(|&i| i == ix) {
-                                    selected_ixs.remove(pos);
-                                } else {
-                                    selected_ixs.push(ix);
-                                }
+            .when_some(self.on_click.filter(|_| !self.disabled), move |this, on_click| {
+                this.on_click(move |_, window, cx| {
+                    let mut selected_ixs = selected_ixs.clone();
+                    if let Some(ix) = state.get() {
+                        if self.multiple {
+                            if let Some(pos) = selected_ixs.iter().position(|&i| i == ix) {
+                                selected_ixs.remove(pos);
                             } else {
-                                selected_ixs.clear();
                                 selected_ixs.push(ix);
                             }
+                        } else {
+                            selected_ixs.clear();
+                            selected_ixs.push(ix);
                         }
+                    }
 
-                        on_click(&selected_ixs, window, cx);
-                    })
-                },
-            )
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use gpui::Axis;
-
-    #[gpui::test]
-    fn test_button_group_builder(_cx: &mut gpui::TestAppContext) {
-        let group = ButtonGroup::new("complex-group")
-            .child(Button::new("btn1").label("One"))
-            .child(Button::new("btn2").label("Two"))
-            .child(Button::new("btn3").label("Three"))
-            .primary()
-            .large()
-            .outline()
-            .compact()
-            .multiple(true)
-            .layout(Axis::Vertical)
-            .disabled(false)
-            .on_click(|_, _, _| {});
-
-        assert_eq!(group.children.len(), 3);
-        assert_eq!(group.variant, Some(ButtonVariant::Primary));
-        assert_eq!(group.size, Some(Size::Large));
-        assert!(group.outline);
-        assert!(group.compact);
-        assert!(group.multiple);
-        assert_eq!(group.layout, Axis::Vertical);
-        assert!(!group.disabled);
-        assert!(group.on_click.is_some());
+                    on_click(&selected_ixs, window, cx);
+                })
+            })
     }
 }

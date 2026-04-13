@@ -2,39 +2,28 @@ use std::{cell::RefCell, rc::Rc};
 
 use gpui::{
     AnyElement, App, Context, Corner, DismissEvent, Element, ElementId, Entity, Focusable,
-    GlobalElementId, Hitbox, HitboxBehavior, InspectorElementId, InteractiveElement, IntoElement,
-    MouseButton, MouseDownEvent, ParentElement, Pixels, Point, StyleRefinement, Styled,
-    Subscription, Window, anchored, deferred, div, prelude::FluentBuilder, px,
+    GlobalElementId, InspectorElementId, InteractiveElement, IntoElement, MouseButton,
+    MouseDownEvent, ParentElement, Pixels, Point, StyleRefinement, Styled, Subscription, Window,
+    anchored, deferred, div, prelude::FluentBuilder, px,
 };
 
 use crate::menu::PopupMenu;
 
 /// A extension trait for adding a context menu to an element.
-pub trait ContextMenuExt: InteractiveElement + ParentElement + Styled {
+pub trait ContextMenuExt: ParentElement + Styled {
     /// Add a context menu to the element.
     ///
     /// This will changed the element to be `relative` positioned, and add a child `ContextMenu` element.
     /// Because the `ContextMenu` element is positioned `absolute`, it will not affect the layout of the parent element.
     fn context_menu(
-        mut self,
+        self,
         f: impl Fn(PopupMenu, &mut Window, &mut Context<PopupMenu>) -> PopupMenu + 'static,
-    ) -> ContextMenu<Self>
-    where
-        Self: Sized,
-    {
-        // Generate a unique ID based on the element's memory address to ensure
-        // each context menu has its own state and doesn't share with others
-        let id = self
-            .interactivity()
-            .element_id
-            .clone()
-            .map(|id| format!("context-menu-{:?}", id))
-            .unwrap_or_else(|| format!("context-menu-{:p}", &self as *const _));
-        ContextMenu::new(id, self).menu(f)
+    ) -> ContextMenu<Self> {
+        ContextMenu::new("context-menu", self).menu(f)
     }
 }
 
-impl<E: InteractiveElement + ParentElement + Styled> ContextMenuExt for E {}
+impl<E: ParentElement + Styled> ContextMenuExt for E {}
 
 /// A context menu that can be shown on right-click.
 pub struct ContextMenu<E: ParentElement + Styled + Sized> {
@@ -140,7 +129,7 @@ impl Default for ContextMenuState {
 
 impl<E: ParentElement + Styled + IntoElement + 'static> Element for ContextMenu<E> {
     type RequestLayoutState = ContextMenuState;
-    type PrepaintState = Hitbox;
+    type PrepaintState = ();
 
     fn id(&self) -> Option<ElementId> {
         Some(self.id.clone())
@@ -183,9 +172,7 @@ impl<E: ParentElement + Styled + IntoElement + 'static> Element for ContextMenu<
                                     div()
                                         .w(window.bounds().size.width)
                                         .h(window.bounds().size.height)
-                                        .on_scroll_wheel(|_, _, cx| {
-                                            cx.stop_propagation();
-                                        })
+                                        .occlude()
                                         .child(
                                             anchored()
                                                 .position(position)
@@ -235,7 +222,7 @@ impl<E: ParentElement + Styled + IntoElement + 'static> Element for ContextMenu<
         &mut self,
         _: Option<&gpui::GlobalElementId>,
         _: Option<&InspectorElementId>,
-        bounds: gpui::Bounds<gpui::Pixels>,
+        _: gpui::Bounds<gpui::Pixels>,
         request_layout: &mut Self::RequestLayoutState,
         window: &mut Window,
         cx: &mut App,
@@ -243,16 +230,15 @@ impl<E: ParentElement + Styled + IntoElement + 'static> Element for ContextMenu<
         if let Some(element) = &mut request_layout.element {
             element.prepaint(window, cx);
         }
-        window.insert_hitbox(bounds, HitboxBehavior::Normal)
     }
 
     fn paint(
         &mut self,
         id: Option<&gpui::GlobalElementId>,
         _: Option<&InspectorElementId>,
-        _: gpui::Bounds<gpui::Pixels>,
+        bounds: gpui::Bounds<gpui::Pixels>,
         request_layout: &mut Self::RequestLayoutState,
-        hitbox: &mut Self::PrepaintState,
+        _: &mut Self::PrepaintState,
         window: &mut Window,
         cx: &mut App,
     ) {
@@ -270,12 +256,11 @@ impl<E: ParentElement + Styled + IntoElement + 'static> Element for ContextMenu<
             |_view, state: &mut ContextMenuState, window, _| {
                 let shared_state = state.shared_state.clone();
 
-                let hitbox = hitbox.clone();
                 // When right mouse click, to build content menu, and show it at the mouse position.
                 window.on_mouse_event(move |event: &MouseDownEvent, phase, window, cx| {
                     if phase.bubble()
                         && event.button == MouseButton::Right
-                        && hitbox.is_hovered(window)
+                        && bounds.contains(&event.position)
                     {
                         {
                             let mut shared_state = shared_state.borrow_mut();

@@ -174,7 +174,6 @@ Select::new(&state)
 Select::new(&state)
     .w(px(320.))                    // Set dropdown width
     .menu_width(px(400.))           // Set menu popup width
-    .menu_max_h(rems(10.))          // Set menu max height (default: 20rem)
     .appearance(false)              // Remove default styling
     .title_prefix("Country: ")      // Add prefix to selected title
 ```
@@ -321,7 +320,7 @@ Select::new(&state)
 h_flex()
     .border_1()
     .border_color(cx.theme().input)
-    .rounded(cx.theme().radius_lg)
+    .rounded_lg()
     .w_full()
     .gap_1()
     .child(

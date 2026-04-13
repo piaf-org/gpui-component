@@ -7,9 +7,7 @@ use gpui::{
 };
 use smallvec::{SmallVec, smallvec};
 
-use crate::{
-    ActiveTheme, Disableable, Icon, Sizable, Size, StyledExt, h_flex, tooltip::ComponentTooltip,
-};
+use crate::{ActiveTheme, Disableable, Icon, Sizable, Size, StyledExt, h_flex};
 
 #[derive(Default, Copy, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ToggleVariant {
@@ -41,7 +39,6 @@ pub struct Toggle {
     disabled: bool,
     children: SmallVec<[AnyElement; 1]>,
     on_click: Option<Box<dyn Fn(&bool, &mut Window, &mut App) + 'static>>,
-    tooltip: ComponentTooltip,
 }
 
 impl Toggle {
@@ -56,14 +53,7 @@ impl Toggle {
             disabled: false,
             children: smallvec![],
             on_click: None,
-            tooltip: ComponentTooltip::default(),
         }
-    }
-
-    /// Set tooltip text for the toggle.
-    pub fn tooltip(mut self, tooltip: impl Into<SharedString>) -> Self {
-        self.tooltip.text = Some((tooltip.into(), None));
-        self
     }
 
     /// Add a label to the toggle.
@@ -170,7 +160,6 @@ impl RenderOnce for Toggle {
                     this.on_click(move |_, window, cx| on_click(&!checked, window, cx))
                 })
             })
-            .map(|this| self.tooltip.apply(this))
     }
 }
 
@@ -287,48 +276,5 @@ impl RenderOnce for ToggleGroup {
                     })
                 })
             })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::IconName;
-
-    #[gpui::test]
-    fn test_toggle_builder(_cx: &mut gpui::TestAppContext) {
-        let toggle = Toggle::new("complex-toggle")
-            .label("Enable Feature")
-            .icon(IconName::Check)
-            .checked(true)
-            .outline()
-            .large()
-            .disabled(false)
-            .on_click(|_, _, _| {});
-
-        assert_eq!(toggle.children.len(), 2); // label + icon
-        assert!(toggle.checked);
-        assert_eq!(toggle.variant, ToggleVariant::Outline);
-        assert_eq!(toggle.size, Size::Large);
-        assert!(!toggle.disabled);
-        assert!(toggle.on_click.is_some());
-    }
-
-    #[gpui::test]
-    fn test_toggle_group_builder(_cx: &mut gpui::TestAppContext) {
-        let group = ToggleGroup::new("complex-group")
-            .child(Toggle::new("toggle1").label("Option 1"))
-            .child(Toggle::new("toggle2").label("Option 2").checked(true))
-            .child(Toggle::new("toggle3").label("Option 3"))
-            .outline()
-            .large()
-            .disabled(false)
-            .on_click(|_, _, _| {});
-
-        assert_eq!(group.items.len(), 3);
-        assert_eq!(group.variant, ToggleVariant::Outline);
-        assert_eq!(group.size, Size::Large);
-        assert!(!group.disabled);
-        assert!(group.on_click.is_some());
     }
 }

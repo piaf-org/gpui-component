@@ -4,13 +4,13 @@ use std::{
     usize,
 };
 
-use gpui::{px, App, HighlightStyle, Hsla, SharedString, UnderlineStyle};
+use gpui::{App, HighlightStyle, Hsla, SharedString, UnderlineStyle, px};
 use ropey::Rope;
 use sum_tree::{Bias, SeekTarget, SumTree};
 
 use crate::{
-    input::{Position, RopeExt as _},
     ActiveTheme,
+    input::{Position, RopeExt as _},
 };
 
 pub type DiagnosticRelatedInformation = lsp_types::DiagnosticRelatedInformation;
@@ -143,7 +143,7 @@ impl DiagnosticSeverity {
 
         let mut style = HighlightStyle::default();
         style.underline = Some(UnderlineStyle {
-            color: color,
+            color,
             thickness: px(1.),
             wavy: true,
         });
@@ -351,11 +351,8 @@ mod tests {
         let mut diagnostics = DiagnosticSet::new(&text);
 
         diagnostics.push(
-            Diagnostic::new(
-                Position::new(0, 7)..Position::new(0, 17),
-                "Spelling mistake",
-            )
-            .with_severity(DiagnosticSeverity::Warning),
+            Diagnostic::new(Position::new(0, 7)..Position::new(0, 17), "Spelling mistake")
+                .with_severity(DiagnosticSeverity::Warning),
         );
         diagnostics.push(
             Diagnostic::new(Position::new(2, 9)..Position::new(2, 14), "Syntax error")

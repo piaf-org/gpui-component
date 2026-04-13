@@ -162,13 +162,13 @@ impl Dock {
                     view.update(cx, |panel, cx| {
                         panel.set_collapsed(true, window, cx);
                     });
-                }
+                },
                 DockItem::Split { items, .. } => {
                     for item in items {
                         item.set_collapsed(true, window, cx);
                     }
-                }
-                _ => {}
+                },
+                _ => {},
             }
         }
 
@@ -199,7 +199,7 @@ impl Dock {
                         });
                     }
                 });
-            }
+            },
             DockItem::Split { items, view, .. } => {
                 for item in items {
                     Self::subscribe_panel_events(dock_area.clone(), item, window, cx);
@@ -212,7 +212,7 @@ impl Dock {
                         });
                     }
                 });
-            }
+            },
             DockItem::Tiles { view, .. } => {
                 window.defer(cx, {
                     let view = view.clone();
@@ -222,20 +222,16 @@ impl Dock {
                         });
                     }
                 });
-            }
+            },
             DockItem::Panel { .. } => {
                 // Not supported
-            }
+            },
         }
     }
 
     pub fn set_panel(&mut self, panel: DockItem, _: &mut Window, cx: &mut Context<Self>) {
         self.panel = panel;
         cx.notify();
-    }
-
-    pub fn panel(&self) -> &DockItem {
-        &self.panel
     }
 
     pub fn is_open(&self) -> bool {
@@ -350,15 +346,15 @@ impl Dock {
             DockPlacement::Left => {
                 let max_size = area_bounds.size.width - PANEL_MIN_SIZE - right_dock_size;
                 self.size = size.clamp(PANEL_MIN_SIZE, max_size);
-            }
+            },
             DockPlacement::Right => {
                 let max_size = area_bounds.size.width - PANEL_MIN_SIZE - left_dock_size;
                 self.size = size.clamp(PANEL_MIN_SIZE, max_size);
-            }
+            },
             DockPlacement::Bottom => {
                 let max_size = area_bounds.size.height - PANEL_MIN_SIZE;
                 self.size = size.clamp(PANEL_MIN_SIZE, max_size);
-            }
+            },
             DockPlacement::Center => unreachable!(),
         }
 

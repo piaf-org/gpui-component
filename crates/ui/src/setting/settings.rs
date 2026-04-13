@@ -32,8 +32,6 @@ pub struct Settings {
     size: Size,
     sidebar_width: Pixels,
     sidebar_style: StyleRefinement,
-    default_selected_index: SelectIndex,
-    header_style: StyleRefinement,
 }
 
 impl Settings {
@@ -46,8 +44,6 @@ impl Settings {
             size: Size::default(),
             sidebar_width: px(250.0),
             sidebar_style: StyleRefinement::default(),
-            default_selected_index: SelectIndex::default(),
-            header_style: StyleRefinement::default(),
         }
     }
 
@@ -83,19 +79,7 @@ impl Settings {
         self
     }
 
-    /// Set the default index of the page to be selected.
-    pub fn default_selected_index(mut self, index: SelectIndex) -> Self {
-        self.default_selected_index = index;
-        self
-    }
-
-    /// Set the style refinement for the header.
-    pub fn header_style(mut self, style: &StyleRefinement) -> Self {
-        self.header_style = style.clone();
-        self
-    }
-
-    fn filtered_pages(&self, query: &str, cx: &App) -> Vec<SettingPage> {
+    fn filtered_pages(&self, query: &str) -> Vec<SettingPage> {
         self.pages
             .iter()
             .filter_map(|page| {
@@ -107,7 +91,7 @@ impl Settings {
                         group.items = group
                             .items
                             .iter()
-                            .filter(|item| item.is_match(&query, cx))
+                            .filter(|item| item.is_match(&query))
                             .cloned()
                             .collect();
                         if group.items.is_empty() {
@@ -159,67 +143,62 @@ impl Settings {
         let selected_index = state.read(cx).selected_index;
         let search_input = state.read(cx).search_input.clone();
 
-        Sidebar::new("settings-sidebar")
+        Sidebar::left()
             .w(relative(1.))
             .border_0()
             .refine_style(&self.sidebar_style)
-            .collapsible(false)
             .collapsed(false)
             .header(
                 div()
                     .w_full()
-                    .refine_style(&self.header_style)
                     .child(Input::new(&search_input).prefix(IconName::Search)),
             )
-            .child(
-                SidebarMenu::new().children(pages.iter().enumerate().map(|(page_ix, page)| {
-                    let is_page_active =
-                        selected_index.page_ix == page_ix && selected_index.group_ix.is_none();
-                    SidebarMenuItem::new(page.title.clone())
-                        .when_some(page.icon.clone(), |this, icon| this.icon(icon))
-                        .default_open(page.default_open)
-                        .active(is_page_active)
-                        .on_click({
-                            let state = state.clone();
-                            move |_, _, cx| {
-                                state.update(cx, |state, cx| {
-                                    state.selected_index = SelectIndex {
-                                        page_ix,
-                                        ..Default::default()
-                                    };
-                                    cx.notify();
-                                })
-                            }
-                        })
-                        .when(page.groups.len() > 1, |this| {
-                            this.children(
-                                page.groups
-                                    .iter()
-                                    .filter(|g| g.title.is_some())
-                                    .enumerate()
-                                    .map(|(group_ix, group)| {
-                                        let is_active = selected_index.page_ix == page_ix
-                                            && selected_index.group_ix == Some(group_ix);
-                                        let title = group.title.clone().unwrap_or_default();
+            .child(SidebarMenu::new().children(pages.iter().enumerate().map(|(page_ix, page)| {
+                let is_page_active =
+                    selected_index.page_ix == page_ix && selected_index.group_ix.is_none();
+                SidebarMenuItem::new(page.title.clone())
+                    .default_open(page.default_open)
+                    .active(is_page_active)
+                    .on_click({
+                        let state = state.clone();
+                        move |_, _, cx| {
+                            state.update(cx, |state, cx| {
+                                state.selected_index = SelectIndex {
+                                    page_ix,
+                                    ..Default::default()
+                                };
+                                cx.notify();
+                            })
+                        }
+                    })
+                    .when(page.groups.len() > 1, |this| {
+                        this.children(
+                            page.groups
+                                .iter()
+                                .filter(|g| g.title.is_some())
+                                .enumerate()
+                                .map(|(group_ix, group)| {
+                                    let is_active = selected_index.page_ix == page_ix
+                                        && selected_index.group_ix == Some(group_ix);
+                                    let title = group.title.clone().unwrap_or_default();
 
-                                        SidebarMenuItem::new(title).active(is_active).on_click({
-                                            let state = state.clone();
-                                            move |_, _, cx| {
-                                                state.update(cx, |state, cx| {
-                                                    state.selected_index = SelectIndex {
-                                                        page_ix,
-                                                        group_ix: Some(group_ix),
-                                                    };
-                                                    state.deferred_scroll_group_ix = Some(group_ix);
-                                                    cx.notify();
-                                                })
-                                            }
-                                        })
-                                    }),
-                            )
-                        })
-                })),
-            )
+                                    SidebarMenuItem::new(title).active(is_active).on_click({
+                                        let state = state.clone();
+                                        move |_, _, cx| {
+                                            state.update(cx, |state, cx| {
+                                                state.selected_index = SelectIndex {
+                                                    page_ix,
+                                                    group_ix: Some(group_ix),
+                                                };
+                                                state.deferred_scroll_group_ix = Some(group_ix);
+                                                cx.notify();
+                                            })
+                                        }
+                                    })
+                                }),
+                        )
+                    })
+            })))
     }
 }
 
@@ -249,9 +228,9 @@ pub struct RenderOptions {
 }
 
 #[derive(Clone, Copy, Default)]
-pub struct SelectIndex {
-    pub page_ix: usize,
-    pub group_ix: Option<usize>,
+pub(super) struct SelectIndex {
+    page_ix: usize,
+    group_ix: Option<usize>,
 }
 
 impl RenderOnce for Settings {
@@ -265,13 +244,13 @@ impl RenderOnce for Settings {
 
             SettingsState {
                 search_input,
-                selected_index: self.default_selected_index,
+                selected_index: SelectIndex::default(),
                 deferred_scroll_group_ix: None,
             }
         });
 
         let query = state.read(cx).search_input.read(cx).value();
-        let filtered_pages = self.filtered_pages(&query, cx);
+        let filtered_pages = self.filtered_pages(&query);
         let options = RenderOptions {
             page_ix: 0,
             group_ix: 0,

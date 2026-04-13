@@ -60,15 +60,12 @@ where
                             InputEvent::Change => {
                                 let value = input.read(cx).value();
                                 set_value(value.into(), cx);
-                            }
-                            _ => {}
+                            },
+                            _ => {},
                         }
                     });
 
-                    State {
-                        input,
-                        _subscription,
-                    }
+                    State { input, _subscription }
                 },
             )
             .read(cx);

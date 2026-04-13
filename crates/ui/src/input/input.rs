@@ -1,8 +1,8 @@
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
-    AnyElement, App, DefiniteLength, Edges, EdgesRefinement, Entity, Hsla, InteractiveElement as _,
+    AnyElement, App, DefiniteLength, Edges, EdgesRefinement, Entity, InteractiveElement as _,
     IntoElement, IsZero, MouseButton, ParentElement as _, Rems, RenderOnce, StyleRefinement,
-    Styled, TextAlign, Window, div, px, relative,
+    Styled, Window, div, px, relative,
 };
 
 use crate::button::{Button, ButtonVariants as _};
@@ -10,24 +10,12 @@ use crate::input::clear_button;
 use crate::input::element::{LINE_NUMBER_RIGHT_MARGIN, RIGHT_MARGIN};
 use crate::scroll::Scrollbar;
 use crate::spinner::Spinner;
-use crate::{ActiveTheme, Colorize, v_flex};
+use crate::{ActiveTheme, v_flex};
 use crate::{IconName, Size};
 use crate::{Selectable, StyledExt, h_flex};
 use crate::{Sizable, StyleSized};
 
 use super::InputState;
-
-/// Returns `(background, foreground)` colors for input-like components.
-pub(crate) fn input_style(disabled: bool, cx: &App) -> (Hsla, Hsla) {
-    if disabled {
-        (
-            cx.theme().input.mix_oklab(cx.theme().transparent, 0.8),
-            cx.theme().muted_foreground,
-        )
-    } else {
-        (cx.theme().input_background(), cx.theme().foreground)
-    }
-}
 
 /// A text input element bind to an [`InputState`].
 #[derive(IntoElement)]
@@ -151,22 +139,25 @@ impl Input {
         self
     }
 
-    fn render_toggle_mask_button(state: &Entity<InputState>, cx: &App) -> impl IntoElement {
-        let masked = state.read(cx).masked;
+    fn render_toggle_mask_button(state: Entity<InputState>) -> impl IntoElement {
         Button::new("toggle-mask")
-            .icon(if masked {
-                IconName::Eye
-            } else {
-                IconName::EyeOff
-            })
+            .icon(IconName::Eye)
             .xsmall()
             .ghost()
             .tab_stop(false)
-            .on_click({
+            .on_mouse_down(MouseButton::Left, {
                 let state = state.clone();
                 move |_, window, cx| {
                     state.update(cx, |state, cx| {
-                        state.set_masked(!state.masked, window, cx);
+                        state.set_masked(false, window, cx);
+                    })
+                }
+            })
+            .on_mouse_up(MouseButton::Left, {
+                let state = state.clone();
+                move |_, window, cx| {
+                    state.update(cx, |state, cx| {
+                        state.set_masked(true, window, cx);
                     })
                 }
             })
@@ -250,39 +241,34 @@ impl Styled for Input {
 impl RenderOnce for Input {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         const LINE_HEIGHT: Rems = Rems(1.25);
-        let text_align = self.style.text.text_align.unwrap_or(TextAlign::Left);
 
         self.state.update(cx, |state, _| {
             state.disabled = self.disabled;
             state.size = self.size;
-            // Only for single line mode
-            if state.mode.is_single_line() {
-                state.text_align = text_align;
-            }
         });
 
         let state = self.state.read(cx);
-        let focused = state.focus_handle.is_focused(window) && !state.disabled;
+        let focused = state.focus_handle.is_focused(window);
         let gap_x = match self.size {
             Size::Small => px(4.),
             Size::Large => px(8.),
             _ => px(6.),
         };
 
-        let (bg, _) = input_style(state.disabled, cx);
-        let bg = if state.mode.is_code_editor() {
-            cx.theme().editor_background()
+        let bg = if state.disabled {
+            cx.theme().muted
         } else {
-            bg
+            if state.mode.is_code_editor() {
+                cx.theme().editor_background()
+            } else {
+                cx.theme().background
+            }
         };
 
         let prefix = self.prefix;
         let suffix = self.suffix;
-        let show_clear_button = self.cleanable
-            && !state.disabled
-            && !state.loading
-            && state.text.len() > 0
-            && state.mode.is_single_line();
+        let show_clear_button =
+            self.cleanable && !state.loading && state.text.len() > 0 && state.mode.is_single_line();
         let has_suffix = suffix.is_some() || state.loading || self.mask_toggle || show_clear_button;
 
         div()
@@ -321,19 +307,15 @@ impl RenderOnce for Input {
             .on_action(window.listener_for(&self.state, InputState::select_left))
             .on_action(window.listener_for(&self.state, InputState::select_right))
             .when(state.mode.is_multi_line(), |this| {
-                let result = this
-                    .on_action(window.listener_for(&self.state, InputState::up))
+                this.on_action(window.listener_for(&self.state, InputState::up))
                     .on_action(window.listener_for(&self.state, InputState::down))
                     .on_action(window.listener_for(&self.state, InputState::select_up))
                     .on_action(window.listener_for(&self.state, InputState::select_down))
                     .on_action(window.listener_for(&self.state, InputState::page_up))
-                    .on_action(window.listener_for(&self.state, InputState::page_down));
-
-                let result = result.on_action(
-                    window.listener_for(&self.state, InputState::on_action_go_to_definition),
-                );
-
-                result
+                    .on_action(window.listener_for(&self.state, InputState::page_down))
+                    .on_action(
+                        window.listener_for(&self.state, InputState::on_action_go_to_definition),
+                    )
             })
             .on_action(window.listener_for(&self.state, InputState::select_all))
             .on_action(window.listener_for(&self.state, InputState::select_to_start_of_line))
@@ -376,7 +358,7 @@ impl RenderOnce for Input {
             .input_py(self.size)
             .input_h(self.size)
             .input_text_size(self.size)
-            .when(!self.disabled, |this| this.cursor_text())
+            .cursor_text()
             .items_center()
             .when(state.mode.is_multi_line(), |this| {
                 this.h_auto()
@@ -384,15 +366,12 @@ impl RenderOnce for Input {
             })
             .when(self.appearance, |this| {
                 this.bg(bg)
-                    .when(self.disabled, |this| this.opacity(0.5))
                     .rounded(cx.theme().radius)
                     .when(self.bordered, |this| {
                         this.border_color(cx.theme().input)
                             .border_1()
                             .when(cx.theme().shadow, |this| this.shadow_xs())
-                            .when(focused && self.focus_bordered, |this| {
-                                this.focused_border(cx)
-                            })
+                            .when(focused && self.focus_bordered, |this| this.focused_border(cx))
                     })
             })
             .items_center()
@@ -401,28 +380,21 @@ impl RenderOnce for Input {
             .children(prefix)
             .when(state.mode.is_multi_line(), |mut this| {
                 let paddings = this.style().padding.clone();
-                this.child(Self::render_editor(
-                    paddings,
-                    &self.state,
-                    &state,
-                    window,
-                    cx,
-                ))
+                this.child(Self::render_editor(paddings, &self.state, &state, window, cx))
             })
-            .when(!state.mode.is_multi_line(), |this| {
-                this.child(self.state.clone())
-            })
+            .when(!state.mode.is_multi_line(), |this| this.child(self.state.clone()))
             .when(has_suffix, |this| {
                 this.pr(self.size.input_px()).child(
                     h_flex()
                         .id("suffix")
                         .gap(gap_x)
+                        .when(self.appearance, |this| this.bg(bg))
                         .items_center()
                         .when(state.loading, |this| {
                             this.child(Spinner::new().color(cx.theme().muted_foreground))
                         })
                         .when(self.mask_toggle, |this| {
-                            this.child(Self::render_toggle_mask_button(&self.state, cx))
+                            this.child(Self::render_toggle_mask_button(self.state.clone()))
                         })
                         .when(show_clear_button, |this| {
                             this.child(clear_button(cx).on_click({

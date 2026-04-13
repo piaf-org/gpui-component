@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::{
     ActiveTheme, AxisExt, FocusableExt as _, Sizable, Size, StyledExt,
-    checkbox::checkbox_check_icon, h_flex, text::Text, tooltip::ComponentTooltip, v_flex,
+    checkbox::checkbox_check_icon, h_flex, text::Text, v_flex,
 };
 use gpui::{
     AnyElement, App, Axis, Div, ElementId, InteractiveElement, IntoElement, ParentElement,
@@ -26,7 +26,6 @@ pub struct Radio {
     tab_index: isize,
     size: Size,
     on_click: Option<Rc<dyn Fn(&bool, &mut Window, &mut App) + 'static>>,
-    tooltip: ComponentTooltip,
 }
 
 impl Radio {
@@ -44,14 +43,7 @@ impl Radio {
             tab_stop: true,
             size: Size::default(),
             on_click: None,
-            tooltip: ComponentTooltip::default(),
         }
-    }
-
-    /// Set tooltip text for the radio.
-    pub fn tooltip(mut self, tooltip: impl Into<SharedString>) -> Self {
-        self.tooltip.text = Some((tooltip.into(), None));
-        self
     }
 
     /// Set the label of the Radio element.
@@ -145,7 +137,7 @@ impl RenderOnce for Radio {
         let (border_color, bg) = if checked {
             (cx.theme().primary, cx.theme().primary)
         } else {
-            (cx.theme().input, cx.theme().input.opacity(0.5))
+            (cx.theme().input, cx.theme().input.opacity(0.3))
         };
         let (border_color, bg) = if disabled {
             (border_color.opacity(0.5), bg.opacity(0.5))
@@ -195,7 +187,7 @@ impl RenderOnce for Radio {
                         .border_color(border_color)
                         .when(cx.theme().shadow && !disabled, |this| this.shadow_xs())
                         .map(|this| match self.checked {
-                            false => this.bg(cx.theme().input_background()),
+                            false => this.bg(cx.theme().background),
                             _ => this.bg(bg),
                         })
                         .child(checkbox_check_icon(
@@ -212,6 +204,7 @@ impl RenderOnce for Radio {
                                 this.child(
                                     div()
                                         .size_full()
+                                        .overflow_hidden()
                                         .line_height(relative(1.))
                                         .when(self.disabled, |this| {
                                             this.text_color(cx.theme().muted_foreground)
@@ -234,8 +227,7 @@ impl RenderOnce for Radio {
                             Self::handle_click(&on_click, checked, window, cx);
                         }
                     })
-                })
-                .map(|this| self.tooltip.apply(this)),
+                }),
         )
     }
 }

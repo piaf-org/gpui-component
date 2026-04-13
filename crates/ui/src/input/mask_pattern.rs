@@ -149,7 +149,7 @@ impl MaskPattern {
         match self {
             Self::Pattern { tokens, .. } => {
                 Some(tokens.iter().map(|token| token.placeholder()).collect())
-            }
+            },
             Self::Number { .. } => None,
             Self::None => None,
         }
@@ -187,7 +187,7 @@ impl MaskPattern {
                     }
                 }
                 text_index == mask_text.len()
-            }
+            },
             Self::Number { separator, .. } => {
                 if mask_text.is_empty() {
                     return true;
@@ -235,7 +235,7 @@ impl MaskPattern {
                 }
 
                 true
-            }
+            },
             Self::None => true,
         }
     }
@@ -264,7 +264,7 @@ impl MaskPattern {
                 }
 
                 false
-            }
+            },
             Self::Number { .. } => true,
             Self::None => true,
         }
@@ -283,10 +283,7 @@ impl MaskPattern {
         }
 
         match self {
-            Self::Number {
-                separator,
-                fraction,
-            } => {
+            Self::Number { separator, fraction } => {
                 if let Some(sep) = *separator {
                     // Remove the existing group separator
                     let text = text.replace(sep, "");
@@ -340,7 +337,7 @@ impl MaskPattern {
                 }
 
                 text.to_owned().into()
-            }
+            },
             Self::Pattern { tokens, .. } => {
                 let mut result = String::new();
                 let mut text_index = 0;
@@ -362,7 +359,7 @@ impl MaskPattern {
                     }
                 }
                 result.into()
-            }
+            },
             Self::None => text.to_owned().into(),
         }
     }
@@ -387,7 +384,7 @@ impl MaskPattern {
                 }
 
                 return mask_text.to_owned();
-            }
+            },
             Self::Pattern { tokens, .. } => {
                 let mut result = String::new();
                 let mask_text_chars: Vec<char> = mask_text.chars().collect();
@@ -402,7 +399,7 @@ impl MaskPattern {
                     }
                 }
                 result
-            }
+            },
             Self::None => mask_text.to_owned(),
         }
     }

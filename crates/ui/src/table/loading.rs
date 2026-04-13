@@ -1,5 +1,5 @@
-use crate::{h_flex, skeleton::Skeleton, v_flex, ActiveTheme, Size};
-use gpui::{prelude::FluentBuilder as _, IntoElement, ParentElement as _, RenderOnce, Styled};
+use crate::{ActiveTheme, Size, h_flex, skeleton::Skeleton, v_flex};
+use gpui::{IntoElement, ParentElement as _, RenderOnce, Styled, prelude::FluentBuilder as _};
 
 #[derive(IntoElement)]
 pub(super) struct Loading {
@@ -61,9 +61,7 @@ impl RenderOnce for LoadingRow {
             .justify_between()
             .overflow_hidden()
             .when(self.header, |this| this.bg(cx.theme().table_head))
-            .when(!self.header, |this| {
-                this.border_t_1().border_color(cx.theme().table_row_border)
-            })
+            .when(!self.header, |this| this.border_t_1().border_color(cx.theme().table_row_border))
             .child(
                 h_flex()
                     .gap_3()

@@ -1,6 +1,6 @@
 use gpui::{
-    Action, AsKeystroke, FocusHandle, Half, IntoElement, KeyContext, Keystroke, ParentElement as _,
-    RenderOnce, StyleRefinement, Styled, Window, div, prelude::FluentBuilder as _, relative,
+    Action, AsKeystroke, FocusHandle, IntoElement, KeyContext, Keystroke, ParentElement as _,
+    RenderOnce, StyleRefinement, Styled, Window, div, relative,
 };
 
 use crate::{ActiveTheme, StyledExt};
@@ -11,7 +11,6 @@ pub struct Kbd {
     style: StyleRefinement,
     stroke: Keystroke,
     appearance: bool,
-    outline: bool,
 }
 
 impl From<Keystroke> for Kbd {
@@ -20,7 +19,6 @@ impl From<Keystroke> for Kbd {
             style: StyleRefinement::default(),
             stroke,
             appearance: true,
-            outline: false,
         }
     }
 }
@@ -32,19 +30,12 @@ impl Kbd {
             style: StyleRefinement::default(),
             stroke,
             appearance: true,
-            outline: false,
         }
     }
 
     /// Set the appearance of the keybinding, default is `true`.
     pub fn appearance(mut self, appearance: bool) -> Self {
         self.appearance = appearance;
-        self
-    }
-
-    /// Use outline style for the keybinding, default is `false`.
-    pub fn outline(mut self) -> Self {
-        self.outline = true;
         self
     }
 
@@ -58,7 +49,7 @@ impl Kbd {
         let binding = match key_context {
             Some(context) => {
                 window.highest_precedence_binding_for_action_in_context(action, context)
-            }
+            },
             None => window.highest_precedence_binding_for_action(action),
         }?;
 
@@ -200,7 +191,7 @@ impl Kbd {
                         keys.push_str(&key_str);
                     }
                 }
-            }
+            },
         }
 
         parts.push(&keys);
@@ -221,18 +212,15 @@ impl RenderOnce for Kbd {
         }
 
         div()
+            .border_1()
+            .border_color(cx.theme().border)
             .text_color(cx.theme().muted_foreground)
-            .bg(cx.theme().muted)
-            .when(self.outline, |this| {
-                this.border_1()
-                    .border_color(cx.theme().border)
-                    .bg(cx.theme().background)
-            })
+            .bg(cx.theme().background)
             .py_0p5()
             .px_1()
             .min_w_5()
             .text_center()
-            .rounded(cx.theme().radius.half())
+            .rounded_sm()
             .line_height(relative(1.))
             .text_xs()
             .whitespace_normal()
@@ -255,50 +243,20 @@ mod tests {
             assert_eq!(Kbd::format(&Keystroke::parse("cmd--").unwrap()), "⌘-");
             assert_eq!(Kbd::format(&Keystroke::parse("cmd-+").unwrap()), "⌘+");
             assert_eq!(Kbd::format(&Keystroke::parse("cmd-enter").unwrap()), "⌘⏎");
-            assert_eq!(
-                Kbd::format(&Keystroke::parse("secondary-f12").unwrap()),
-                "⌘F12"
-            );
-            assert_eq!(
-                Kbd::format(&Keystroke::parse("shift-pagedown").unwrap()),
-                "⇧Page Down"
-            );
-            assert_eq!(
-                Kbd::format(&Keystroke::parse("shift-pageup").unwrap()),
-                "⇧Page Up"
-            );
-            assert_eq!(
-                Kbd::format(&Keystroke::parse("shift-space").unwrap()),
-                "⇧Space"
-            );
+            assert_eq!(Kbd::format(&Keystroke::parse("secondary-f12").unwrap()), "⌘F12");
+            assert_eq!(Kbd::format(&Keystroke::parse("shift-pagedown").unwrap()), "⇧Page Down");
+            assert_eq!(Kbd::format(&Keystroke::parse("shift-pageup").unwrap()), "⇧Page Up");
+            assert_eq!(Kbd::format(&Keystroke::parse("shift-space").unwrap()), "⇧Space");
             assert_eq!(Kbd::format(&Keystroke::parse("cmd-ctrl-a").unwrap()), "⌃⌘A");
-            assert_eq!(
-                Kbd::format(&Keystroke::parse("cmd-alt-backspace").unwrap()),
-                "⌥⌘⌫"
-            );
-            assert_eq!(
-                Kbd::format(&Keystroke::parse("shift-delete").unwrap()),
-                "⇧⌫"
-            );
-            assert_eq!(
-                Kbd::format(&Keystroke::parse("cmd-ctrl-shift-a").unwrap()),
-                "⌃⇧⌘A"
-            );
-            assert_eq!(
-                Kbd::format(&Keystroke::parse("cmd-ctrl-shift-alt-a").unwrap()),
-                "⌃⌥⇧⌘A"
-            );
+            assert_eq!(Kbd::format(&Keystroke::parse("cmd-alt-backspace").unwrap()), "⌥⌘⌫");
+            assert_eq!(Kbd::format(&Keystroke::parse("shift-delete").unwrap()), "⇧⌫");
+            assert_eq!(Kbd::format(&Keystroke::parse("cmd-ctrl-shift-a").unwrap()), "⌃⇧⌘A");
+            assert_eq!(Kbd::format(&Keystroke::parse("cmd-ctrl-shift-alt-a").unwrap()), "⌃⌥⇧⌘A");
         } else {
             assert_eq!(Kbd::format(&Keystroke::parse("a").unwrap()), "A");
             assert_eq!(Kbd::format(&Keystroke::parse("ctrl-a").unwrap()), "Ctrl+A");
-            assert_eq!(
-                Kbd::format(&Keystroke::parse("shift-space").unwrap()),
-                "Shift+Space"
-            );
-            assert_eq!(
-                Kbd::format(&Keystroke::parse("ctrl-alt-a").unwrap()),
-                "Ctrl+Alt+A"
-            );
+            assert_eq!(Kbd::format(&Keystroke::parse("shift-space").unwrap()), "Shift+Space");
+            assert_eq!(Kbd::format(&Keystroke::parse("ctrl-alt-a").unwrap()), "Ctrl+Alt+A");
             assert_eq!(
                 Kbd::format(&Keystroke::parse("ctrl-alt-shift-a").unwrap()),
                 "Ctrl+Alt+Shift+A"
@@ -311,14 +269,8 @@ mod tests {
                 Kbd::format(&Keystroke::parse("ctrl-shift-backspace").unwrap()),
                 "Ctrl+Shift+Backspace"
             );
-            assert_eq!(
-                Kbd::format(&Keystroke::parse("alt-delete").unwrap()),
-                "Alt+Delete"
-            );
-            assert_eq!(
-                Kbd::format(&Keystroke::parse("alt-tab").unwrap()),
-                "Alt+Tab"
-            );
+            assert_eq!(Kbd::format(&Keystroke::parse("alt-delete").unwrap()), "Alt+Delete");
+            assert_eq!(Kbd::format(&Keystroke::parse("alt-tab").unwrap()), "Alt+Tab");
         }
     }
 }

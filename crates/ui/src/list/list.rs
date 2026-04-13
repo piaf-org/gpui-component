@@ -1,5 +1,5 @@
 use std::ops::Range;
-use instant::Duration;
+use std::time::Duration;
 
 use crate::actions::{Cancel, Confirm, SelectDown, SelectUp};
 use crate::input::InputState;
@@ -22,6 +22,7 @@ use gpui::{
     Length, MouseButton, ParentElement, Render, Styled, Task, Window, div, prelude::FluentBuilder,
 };
 use rust_i18n::t;
+use smol::Timer;
 
 pub(crate) fn init(cx: &mut App) {
     let context: Option<&str> = Some("List");
@@ -195,30 +196,6 @@ where
         self.selected_index
     }
 
-    /// Set the index of the item that has been right clicked.
-    pub fn set_right_clicked_index(
-        &mut self,
-        ix: Option<IndexPath>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.mouse_right_clicked_index = ix;
-        self.delegate.set_right_clicked_index(ix, window, cx);
-    }
-
-    /// Returns the index of the item that has been right clicked.
-    pub fn right_clicked_index(&self) -> Option<IndexPath> {
-        self.mouse_right_clicked_index
-    }
-
-    /// Set the query text of the search input, this will trigger a search.
-    pub fn set_query(&mut self, query: &str, window: &mut Window, cx: &mut Context<Self>) {
-        let query = query.to_string();
-        self.query_input.update(cx, |input, cx| {
-            input.set_value(query, window, cx);
-        });
-    }
-
     /// Set a specific list item for measurement.
     pub fn set_item_to_measure_index(
         &mut self,
@@ -295,13 +272,16 @@ where
                     });
 
                     // Always wait 100ms to avoid flicker
-                    window.background_executor().timer(Duration::from_millis(100)).await;
+                    Timer::after(Duration::from_millis(100)).await;
                     _ = this.update_in(window, |this, window, cx| {
                         this.set_searching(false, window, cx);
                     });
                 });
-            }
-            _ => {}
+            },
+            InputEvent::PressEnter { secondary } => {
+                self.on_action_confirm(&Confirm { secondary: *secondary }, window, cx)
+            },
+            _ => {},
         }
     }
 
@@ -325,7 +305,7 @@ where
         // Securely handle subtract logic to prevent attempt
         // to subtract with overflow
         if visible_end >= entities_count.saturating_sub(threshold) {
-            if !self.delegate.has_more(cx) {
+            if !self.delegate.is_eof(cx) {
                 return;
             }
 
@@ -415,7 +395,8 @@ where
     }
 
     fn prepare_items_if_needed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let sections_count = self.delegate.sections_count(cx).max(1);
+        let sections_count = self.delegate.sections_count(cx);
+
         let mut measured_size = MeasuredEntrySize::default();
 
         // Measure the item_height and section header/footer height.
@@ -471,7 +452,7 @@ where
             }))
             .when(selectable, |this| {
                 this.on_click(cx.listener(move |this, e: &ClickEvent, window, cx| {
-                    this.set_right_clicked_index(None, window, cx);
+                    this.mouse_right_clicked_index = None;
                     this.selected_index = Some(ix);
                     this.on_action_confirm(
                         &Confirm {
@@ -483,8 +464,8 @@ where
                 }))
                 .on_mouse_down(
                     MouseButton::Right,
-                    cx.listener(move |this, _, window, cx| {
-                        this.set_right_clicked_index(Some(ix), window, cx);
+                    cx.listener(move |this, _, _, cx| {
+                        this.mouse_right_clicked_index = Some(ix);
                         cx.notify();
                     }),
                 )
@@ -508,9 +489,7 @@ where
             .size_full()
             .when_some(self.options.max_height, |this, h| this.max_h(h))
             .overflow_hidden()
-            .when(items_count == 0, |this| {
-                this.child(self.delegate.render_empty(window, cx))
-            })
+            .when(items_count == 0, |this| this.child(self.delegate.render_empty(window, cx)))
             .when(items_count > 0, {
                 |this| {
                     this.child(
@@ -563,9 +542,7 @@ where
                     )
                 }
             })
-            .when(scrollbar_visible, |this| {
-                this.child(Scrollbar::vertical(&scroll_handle))
-            })
+            .when(scrollbar_visible, |this| this.child(Scrollbar::vertical(&scroll_handle)))
     }
 }
 
@@ -670,8 +647,8 @@ where
                     })
                     // Click out to cancel right clicked row
                     .when(mouse_right_clicked_index.is_some(), |this| {
-                        this.on_mouse_down_out(cx.listener(|this, _, window, cx| {
-                            this.set_right_clicked_index(None, window, cx);
+                        this.on_mouse_down_out(cx.listener(|this, _, _, cx| {
+                            this.mouse_right_clicked_index = None;
                             cx.notify();
                         }))
                     })

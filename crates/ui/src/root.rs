@@ -1,17 +1,15 @@
 use crate::{
-    ActiveTheme, Anchor, ElementExt, Placement, StyledExt,
-    dialog::{ANIMATION_DURATION, Dialog},
-    focus_trap::FocusTrapManager,
+    ActiveTheme, Placement,
+    dialog::Dialog,
     input::InputState,
     notification::{Notification, NotificationList},
     sheet::Sheet,
-    tooltip::TooltipOverlay,
     window_border,
 };
 use gpui::{
     AnyView, App, AppContext, Context, DefiniteLength, Entity, FocusHandle, InteractiveElement,
-    IntoElement, KeyBinding, ParentElement as _, Pixels, Render, StyleRefinement, Styled,
-    WeakFocusHandle, Window, actions, div, prelude::FluentBuilder as _,
+    IntoElement, KeyBinding, ParentElement as _, Render, Styled, Window, actions, canvas, div,
+    prelude::FluentBuilder as _,
 };
 use std::{any::TypeId, rc::Rc};
 
@@ -25,29 +23,208 @@ pub(crate) fn init(cx: &mut App) {
     ]);
 }
 
+/// Extension trait for [`Window`] to add dialog, sheet .. functionality.
+pub trait WindowExt: Sized {
+    /// Opens a Sheet at right placement.
+    fn open_sheet<F>(&mut self, cx: &mut App, build: F)
+    where
+        F: Fn(Sheet, &mut Window, &mut App) -> Sheet + 'static;
+
+    /// Opens a Sheet at the given placement.
+    fn open_sheet_at<F>(&mut self, placement: Placement, cx: &mut App, build: F)
+    where
+        F: Fn(Sheet, &mut Window, &mut App) -> Sheet + 'static;
+
+    /// Return true, if there is an active Sheet.
+    fn has_active_sheet(&mut self, cx: &mut App) -> bool;
+
+    /// Closes the active Sheet.
+    fn close_sheet(&mut self, cx: &mut App);
+
+    /// Opens a Dialog.
+    fn open_dialog<F>(&mut self, cx: &mut App, build: F)
+    where
+        F: Fn(Dialog, &mut Window, &mut App) -> Dialog + 'static;
+
+    /// Return true, if there is an active Dialog.
+    fn has_active_dialog(&mut self, cx: &mut App) -> bool;
+
+    /// Closes the last active Dialog.
+    fn close_dialog(&mut self, cx: &mut App);
+
+    /// Closes all active Dialogs.
+    fn close_all_dialogs(&mut self, cx: &mut App);
+
+    /// Pushes a notification to the notification list.
+    fn push_notification(&mut self, note: impl Into<Notification>, cx: &mut App);
+
+    /// Removes the notification with the given id.
+    fn remove_notification<T: Sized + 'static>(&mut self, cx: &mut App);
+
+    /// Clears all notifications.
+    fn clear_notifications(&mut self, cx: &mut App);
+
+    /// Returns number of notifications.
+    fn notifications(&mut self, cx: &mut App) -> Rc<Vec<Entity<Notification>>>;
+
+    /// Return current focused Input entity.
+    fn focused_input(&mut self, cx: &mut App) -> Option<Entity<InputState>>;
+    /// Returns true if there is a focused Input entity.
+    fn has_focused_input(&mut self, cx: &mut App) -> bool;
+}
+
+impl WindowExt for Window {
+    fn open_sheet<F>(&mut self, cx: &mut App, build: F)
+    where
+        F: Fn(Sheet, &mut Window, &mut App) -> Sheet + 'static,
+    {
+        self.open_sheet_at(Placement::Right, cx, build)
+    }
+
+    fn open_sheet_at<F>(&mut self, placement: Placement, cx: &mut App, build: F)
+    where
+        F: Fn(Sheet, &mut Window, &mut App) -> Sheet + 'static,
+    {
+        Root::update(self, cx, move |root, window, cx| {
+            if root.active_sheet.is_none() {
+                root.previous_focus_handle = window.focused(cx);
+            }
+
+            let focus_handle = cx.focus_handle();
+            focus_handle.focus(window, cx);
+
+            root.active_sheet = Some(ActiveSheet {
+                focus_handle,
+                placement,
+                builder: Rc::new(build),
+            });
+            cx.notify();
+        })
+    }
+
+    fn has_active_sheet(&mut self, cx: &mut App) -> bool {
+        Root::read(self, cx).active_sheet.is_some()
+    }
+
+    fn close_sheet(&mut self, cx: &mut App) {
+        Root::update(self, cx, |root, window, cx| {
+            root.focused_input = None;
+            root.active_sheet = None;
+            root.focus_back(window, cx);
+            cx.notify();
+        })
+    }
+
+    fn open_dialog<F>(&mut self, cx: &mut App, build: F)
+    where
+        F: Fn(Dialog, &mut Window, &mut App) -> Dialog + 'static,
+    {
+        Root::update(self, cx, move |root, window, cx| {
+            // Only save focus handle if there are no active dialogs.
+            // This is used to restore focus when all dialogs are closed.
+            if root.active_dialogs.len() == 0 {
+                root.previous_focus_handle = window.focused(cx);
+            }
+
+            let focus_handle = cx.focus_handle();
+            focus_handle.focus(window, cx);
+
+            root.active_dialogs.push(ActiveDialog {
+                focus_handle,
+                builder: Rc::new(build),
+            });
+            cx.notify();
+        })
+    }
+
+    fn has_active_dialog(&mut self, cx: &mut App) -> bool {
+        Root::read(self, cx).active_dialogs.len() > 0
+    }
+
+    fn close_dialog(&mut self, cx: &mut App) {
+        Root::update(self, cx, move |root, window, cx| {
+            root.focused_input = None;
+            root.active_dialogs.pop();
+
+            if let Some(top_dialog) = root.active_dialogs.last() {
+                // Focus the next dialog.
+                top_dialog.focus_handle.focus(window, cx);
+            } else {
+                // Restore focus if there are no more dialogs.
+                root.focus_back(window, cx);
+            }
+            cx.notify();
+        })
+    }
+
+    fn close_all_dialogs(&mut self, cx: &mut App) {
+        Root::update(self, cx, |root, window, cx| {
+            root.focused_input = None;
+            root.active_dialogs.clear();
+            root.focus_back(window, cx);
+            cx.notify();
+        })
+    }
+
+    fn push_notification(&mut self, note: impl Into<Notification>, cx: &mut App) {
+        let note = note.into();
+        Root::update(self, cx, move |root, window, cx| {
+            root.notification
+                .update(cx, |view, cx| view.push(note, window, cx));
+            cx.notify();
+        })
+    }
+
+    fn remove_notification<T: Sized + 'static>(&mut self, cx: &mut App) {
+        Root::update(self, cx, move |root, window, cx| {
+            root.notification.update(cx, |view, cx| {
+                let id = TypeId::of::<T>();
+                view.close(id, window, cx);
+            });
+            cx.notify();
+        })
+    }
+
+    fn clear_notifications(&mut self, cx: &mut App) {
+        Root::update(self, cx, move |root, window, cx| {
+            root.notification
+                .update(cx, |view, cx| view.clear(window, cx));
+            cx.notify();
+        })
+    }
+
+    fn notifications(&mut self, cx: &mut App) -> Rc<Vec<Entity<Notification>>> {
+        let entity = Root::read(self, cx).notification.clone();
+        Rc::new(entity.read(cx).notifications())
+    }
+
+    fn has_focused_input(&mut self, cx: &mut App) -> bool {
+        Root::read(self, cx).focused_input.is_some()
+    }
+
+    fn focused_input(&mut self, cx: &mut App) -> Option<Entity<InputState>> {
+        Root::read(self, cx).focused_input.clone()
+    }
+}
+
 /// Root is a view for the App window for as the top level view (Must be the first view in the window).
 ///
 /// It is used to manage the Sheet, Dialog, and Notification.
 pub struct Root {
-    style: StyleRefinement,
-    view: AnyView,
-    pub(crate) active_sheet: Option<ActiveSheet>,
+    /// Used to store the focus handle of the previous view.
+    /// When the Dialog, Sheet closes, we will focus back to the previous view.
+    previous_focus_handle: Option<FocusHandle>,
+    active_sheet: Option<ActiveSheet>,
     pub(crate) active_dialogs: Vec<ActiveDialog>,
     pub(super) focused_input: Option<Entity<InputState>>,
     pub notification: Entity<NotificationList>,
-    pub(crate) tooltip_overlay: Entity<TooltipOverlay>,
     sheet_size: Option<DefiniteLength>,
-    window_shadow_size: Pixels,
-    /// The focus handle that will be restored after a dialog is closed with animation.
-    /// Used to handle rapid dialog opening/closing to maintain correct focus chain.
-    pending_focus_restore: Option<WeakFocusHandle>,
+    view: AnyView,
 }
 
 #[derive(Clone)]
-pub(crate) struct ActiveSheet {
+struct ActiveSheet {
     focus_handle: FocusHandle,
-    /// The previous focused handle before opening the Sheet.
-    previous_focused_handle: Option<WeakFocusHandle>,
     placement: Placement,
     builder: Rc<dyn Fn(Sheet, &mut Window, &mut App) -> Sheet + 'static>,
 }
@@ -55,48 +232,21 @@ pub(crate) struct ActiveSheet {
 #[derive(Clone)]
 pub(crate) struct ActiveDialog {
     focus_handle: FocusHandle,
-    /// The previous focused handle before opening the Dialog.
-    previous_focused_handle: Option<WeakFocusHandle>,
     builder: Rc<dyn Fn(Dialog, &mut Window, &mut App) -> Dialog + 'static>,
-}
-
-impl ActiveDialog {
-    pub(crate) fn new(
-        focus_handle: FocusHandle,
-        previous_focused_handle: Option<WeakFocusHandle>,
-        builder: impl Fn(Dialog, &mut Window, &mut App) -> Dialog + 'static,
-    ) -> Self {
-        Self {
-            focus_handle,
-            previous_focused_handle,
-            builder: Rc::new(builder),
-        }
-    }
 }
 
 impl Root {
     /// Create a new Root view.
     pub fn new(view: impl Into<AnyView>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         Self {
-            style: StyleRefinement::default(),
-            view: view.into(),
+            previous_focus_handle: None,
             active_sheet: None,
             active_dialogs: Vec::new(),
             focused_input: None,
             notification: cx.new(|cx| NotificationList::new(window, cx)),
-            tooltip_overlay: cx.new(|_| TooltipOverlay::new()),
             sheet_size: None,
-            window_shadow_size: window_border::SHADOW_SIZE,
-            pending_focus_restore: None,
+            view: view.into(),
         }
-    }
-
-    /// Set the window border shadow size for Linux client-side decorations.
-    ///
-    /// Default: [`window_border::SHADOW_SIZE`]
-    pub fn window_shadow_size(mut self, size: impl Into<Pixels>) -> Self {
-        self.window_shadow_size = size.into();
-        self
     }
 
     pub fn update<F, R>(window: &mut Window, cx: &mut App, f: F) -> R
@@ -119,6 +269,12 @@ impl Root {
             .read(cx)
     }
 
+    fn focus_back(&mut self, window: &mut Window, cx: &mut App) {
+        if let Some(handle) = self.previous_focus_handle.clone() {
+            window.focus(&handle, cx);
+        }
+    }
+
     // Render Notification layer.
     pub fn render_notification_layer(
         window: &mut Window,
@@ -128,42 +284,19 @@ impl Root {
 
         let active_sheet_placement = root.read(cx).active_sheet.clone().map(|d| d.placement);
 
-        let sheet_size = root.read(cx).sheet_size;
-        let (mt, mr, mb, ml) = match active_sheet_placement {
-            Some(Placement::Top) => (sheet_size, None, None, None),
-            Some(Placement::Right) => (None, sheet_size, None, None),
-            Some(Placement::Bottom) => (None, None, sheet_size, None),
-            Some(Placement::Left) => (None, None, None, sheet_size),
-            _ => (None, None, None, None),
+        let (mt, mr) = match active_sheet_placement {
+            Some(Placement::Right) => (None, root.read(cx).sheet_size),
+            Some(Placement::Top) => (root.read(cx).sheet_size, None),
+            _ => (None, None),
         };
-
-        let placement = cx.theme().notification.placement;
 
         Some(
             div()
                 .absolute()
-                .when(matches!(placement, Anchor::TopRight), |this| {
-                    this.top_0().right_0()
-                })
-                .when(matches!(placement, Anchor::TopLeft), |this| {
-                    this.top_0().left_0()
-                })
-                .when(matches!(placement, Anchor::TopCenter), |this| {
-                    this.top_0().mx_auto()
-                })
-                .when(matches!(placement, Anchor::BottomRight), |this| {
-                    this.bottom_0().right_0()
-                })
-                .when(matches!(placement, Anchor::BottomLeft), |this| {
-                    this.bottom_0().left_0()
-                })
-                .when(matches!(placement, Anchor::BottomCenter), |this| {
-                    this.bottom_0().mx_auto()
-                })
+                .top_0()
+                .right_0()
                 .when_some(mt, |this, offset| this.mt(offset))
                 .when_some(mr, |this, offset| this.mr(offset))
-                .when_some(mb, |this, offset| this.mb(offset))
-                .when_some(ml, |this, offset| this.ml(offset))
                 .child(root.read(cx).notification.clone()),
         )
     }
@@ -184,10 +317,14 @@ impl Root {
             let size = sheet.size;
 
             return Some(
-                div()
-                    .relative()
-                    .child(sheet)
-                    .on_prepaint(move |_, _, cx| root.update(cx, |r, _| r.sheet_size = Some(size))),
+                div().relative().child(sheet).child(
+                    canvas(
+                        move |_, _, cx| root.update(cx, |r, _| r.sheet_size = Some(size)),
+                        |_, _, _, _| {},
+                    )
+                    .absolute()
+                    .size_full(),
+                ),
             );
         }
 
@@ -213,7 +350,7 @@ impl Root {
             .iter()
             .enumerate()
             .map(|(i, active_dialog)| {
-                let mut dialog = Dialog::new(cx);
+                let mut dialog = Dialog::new(window, cx);
 
                 dialog = (active_dialog.builder)(dialog, window, cx);
 
@@ -235,160 +372,11 @@ impl Root {
 
         if let Some(ix) = show_overlay_ix {
             if let Some(dialog) = dialogs.get_mut(ix) {
-                dialog.props.overlay_visible = true;
+                dialog.overlay_visible = true;
             }
         }
 
         Some(div().children(dialogs))
-    }
-
-    pub fn open_dialog<F>(&mut self, build: F, window: &mut Window, cx: &mut Context<'_, Root>)
-    where
-        F: Fn(Dialog, &mut Window, &mut App) -> Dialog + 'static,
-    {
-        let mut previous_focused_handle = window.focused(cx).map(|h| h.downgrade());
-
-        // Use pending focus restore if available to maintain correct focus chain
-        // when a new dialog is opened immediately after closing another dialog.
-        if let Some(pending_handle) = self.pending_focus_restore.take() {
-            previous_focused_handle = Some(pending_handle);
-        }
-
-        let focus_handle = cx.focus_handle();
-        focus_handle.focus(window, cx);
-
-        self.active_dialogs.push(ActiveDialog::new(
-            focus_handle,
-            previous_focused_handle,
-            build,
-        ));
-        cx.notify();
-    }
-
-    fn close_dialog_internal(&mut self) -> Option<FocusHandle> {
-        self.focused_input = None;
-        self.active_dialogs
-            .pop()
-            .and_then(|d| d.previous_focused_handle)
-            .and_then(|h| h.upgrade())
-    }
-
-    pub fn close_dialog(&mut self, window: &mut Window, cx: &mut Context<'_, Root>) {
-        if let Some(handle) = self.close_dialog_internal() {
-            window.focus(&handle, cx);
-        }
-        cx.notify();
-    }
-
-    pub(crate) fn defer_close_dialog(&mut self, window: &mut Window, cx: &mut Context<'_, Root>) {
-        if let Some(handle) = self.close_dialog_internal() {
-            let dialogs_count = self.active_dialogs.len();
-
-            // Save for new dialogs opened during animation to maintain focus chain
-            self.pending_focus_restore = Some(handle.downgrade());
-
-            cx.spawn_in(window, async move |this, cx| {
-                cx.background_executor().timer(*ANIMATION_DURATION).await;
-                let _ = this.update_in(cx, |this, window, cx| {
-                    let current_dialogs_count = this.active_dialogs.len();
-                    // Only restore focus if no new dialogs were opened during animation
-                    if current_dialogs_count == dialogs_count {
-                        window.focus(&handle, cx);
-                    }
-                    this.pending_focus_restore = None;
-                });
-            })
-            .detach();
-        }
-        cx.notify();
-    }
-
-    pub fn close_all_dialogs(&mut self, window: &mut Window, cx: &mut Context<'_, Root>) {
-        self.focused_input = None;
-        let previous_focused_handle = self
-            .active_dialogs
-            .first()
-            .and_then(|d| d.previous_focused_handle.clone());
-        self.active_dialogs.clear();
-        if let Some(handle) = previous_focused_handle.and_then(|h| h.upgrade()) {
-            window.focus(&handle, cx);
-        }
-        cx.notify();
-    }
-
-    pub fn open_sheet_at<F>(
-        &mut self,
-        placement: Placement,
-        build: F,
-        window: &mut Window,
-        cx: &mut Context<'_, Root>,
-    ) where
-        F: Fn(Sheet, &mut Window, &mut App) -> Sheet + 'static,
-    {
-        let previous_focused_handle = self
-            .active_sheet
-            .take()
-            .and_then(|s| s.previous_focused_handle)
-            .or_else(|| window.focused(cx).map(|h| h.downgrade()));
-
-        let focus_handle = cx.focus_handle();
-        focus_handle.focus(window, cx);
-        self.active_sheet = Some(ActiveSheet {
-            focus_handle,
-            previous_focused_handle,
-            placement,
-            builder: Rc::new(build),
-        });
-        cx.notify();
-    }
-
-    pub fn close_sheet(&mut self, window: &mut Window, cx: &mut Context<'_, Root>) {
-        self.focused_input = None;
-        if let Some(previous_handle) = self
-            .active_sheet
-            .as_ref()
-            .and_then(|s| s.previous_focused_handle.as_ref())
-            .and_then(|h| h.upgrade())
-        {
-            window.focus(&previous_handle, cx);
-        }
-        self.active_sheet = None;
-        cx.notify();
-    }
-
-    pub fn push_notification(
-        &mut self,
-        note: impl Into<Notification>,
-        window: &mut Window,
-        cx: &mut Context<'_, Root>,
-    ) {
-        self.notification
-            .update(cx, |view, cx| view.push(note, window, cx));
-        cx.notify();
-    }
-
-    pub fn remove_notification<T: Sized + 'static>(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<'_, Root>,
-    ) {
-        self.notification.update(cx, |view, cx| {
-            let id = TypeId::of::<T>();
-            view.close(id, window, cx);
-        });
-        cx.notify();
-    }
-
-    pub fn clear_notifications(&mut self, window: &mut Window, cx: &mut Context<'_, Root>) {
-        self.notification
-            .update(cx, |view, cx| view.clear(window, cx));
-        cx.notify();
-    }
-
-    /// Get the tooltip overlay entity for this window.
-    pub(crate) fn tooltip_overlay(window: &Window, cx: &App) -> Option<Entity<TooltipOverlay>> {
-        let root = window.root::<Root>()??;
-        Some(root.read(cx).tooltip_overlay.clone())
     }
 
     /// Return the root view of the Root.
@@ -397,79 +385,11 @@ impl Root {
     }
 
     fn on_action_tab(&mut self, _: &Tab, window: &mut Window, cx: &mut Context<Self>) {
-        // Check if we're inside a focus trap
-        if let Some(container_focus_handle) = FocusTrapManager::find_active_trap(window, cx) {
-            // We're in a focus trap - try to focus next, then check if we're still inside
-            let before_focus = window.focused(cx);
-
-            // Try normal focus navigation
-            window.focus_next(cx);
-
-            // Check if we're still in the trap
-            if !container_focus_handle.contains_focused(window, cx) {
-                // We jumped out of the trap - need to cycle back to the beginning
-                // Find the first focusable element in the trap by continuing to focus_next
-                let mut attempts = 0;
-                const MAX_ATTEMPTS: usize = 100; // Prevent infinite loop
-
-                while !container_focus_handle.contains_focused(window, cx)
-                    && attempts < MAX_ATTEMPTS
-                {
-                    window.focus_next(cx);
-                    attempts += 1;
-
-                    // If we cycled back to where we started, restore original focus
-                    if window.focused(cx) == before_focus {
-                        break;
-                    }
-                }
-            }
-            return;
-        }
-
-        // Normal tab navigation
         window.focus_next(cx);
     }
 
     fn on_action_tab_prev(&mut self, _: &TabPrev, window: &mut Window, cx: &mut Context<Self>) {
-        // Check if we're inside a focus trap
-        if let Some(container_focus_handle) = FocusTrapManager::find_active_trap(window, cx) {
-            // We're in a focus trap - try to focus previous, then check if we're still inside
-            let before_focus = window.focused(cx);
-
-            // Try normal focus navigation
-            window.focus_prev(cx);
-
-            // Check if we're still in the trap
-            if !container_focus_handle.contains_focused(window, cx) {
-                // We jumped out of the trap - need to cycle back to the end
-                // Find the last focusable element in the trap by continuing to focus_prev
-                let mut attempts = 0;
-                const MAX_ATTEMPTS: usize = 100; // Prevent infinite loop
-
-                while !container_focus_handle.contains_focused(window, cx)
-                    && attempts < MAX_ATTEMPTS
-                {
-                    window.focus_prev(cx);
-                    attempts += 1;
-
-                    // If we cycled back to where we started, restore original focus
-                    if window.focused(cx) == before_focus {
-                        break;
-                    }
-                }
-            }
-            return;
-        }
-
-        // Normal tab navigation
         window.focus_prev(cx);
-    }
-}
-
-impl Styled for Root {
-    fn style(&mut self) -> &mut StyleRefinement {
-        &mut self.style
     }
 }
 
@@ -477,7 +397,7 @@ impl Render for Root {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         window.set_rem_size(cx.theme().font_size);
 
-        window_border().shadow_size(self.window_shadow_size).child(
+        window_border().child(
             div()
                 .id("root")
                 .key_context(CONTEXT)
@@ -488,9 +408,7 @@ impl Render for Root {
                 .font_family(cx.theme().font_family.clone())
                 .bg(cx.theme().background)
                 .text_color(cx.theme().foreground)
-                .refine_style(&self.style)
-                .child(self.view.clone())
-                .child(self.tooltip_overlay.clone()),
+                .child(self.view.clone()),
         )
     }
 }

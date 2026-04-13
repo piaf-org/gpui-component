@@ -7,24 +7,23 @@ use markdown::{
 use crate::{
     highlighter::HighlightTheme,
     text::{
-        document::ParsedDocument,
+        TextViewStyle,
         node::{
-            self, BlockNode, CodeBlock, ImageNode, InlineNode, LinkMark, NodeContext, Paragraph,
-            Span, Table, TableRow, TextMark,
+            self, CodeBlock, ImageNode, InlineNode, LinkMark, NodeContext, Paragraph, Span, Table,
+            TableRow, TextMark,
         },
     },
 };
 
 /// Parse Markdown into a tree of nodes.
-///
-/// TODO: Remove `highlight_theme` option, this should in render stage.
 pub(crate) fn parse(
-    source: &str,
+    raw: &str,
+    style: &TextViewStyle,
     cx: &mut NodeContext,
     highlight_theme: &HighlightTheme,
-) -> Result<ParsedDocument, SharedString> {
-    markdown::to_mdast(&source, &ParseOptions::gfm())
-        .map(|n| ast_to_document(source, n, cx, highlight_theme))
+) -> Result<node::Node, SharedString> {
+    markdown::to_mdast(&raw, &ParseOptions::gfm())
+        .map(|n| ast_to_node(n, style, cx, highlight_theme))
         .map_err(|e| e.to_string().into())
 }
 
@@ -34,8 +33,8 @@ fn parse_table_row(table: &mut Table, node: &mdast::TableRow, cx: &mut NodeConte
         match c {
             Node::TableCell(cell) => {
                 parse_table_cell(&mut row, cell, cx);
-            }
-            _ => {}
+            },
+            _ => {},
         };
     });
     table.children.push(row);
@@ -55,8 +54,8 @@ fn parse_table_cell(row: &mut node::TableRow, node: &mdast::TableCell, cx: &mut 
 
 fn parse_paragraph(paragraph: &mut Paragraph, node: &mdast::Node, cx: &mut NodeContext) -> String {
     let span = node.position().map(|pos| Span {
-        start: cx.offset + pos.start.offset,
-        end: cx.offset + pos.end.offset,
+        start: pos.start.offset,
+        end: pos.end.offset,
     });
     if let Some(span) = span {
         paragraph.set_span(span);
@@ -69,11 +68,11 @@ fn parse_paragraph(paragraph: &mut Paragraph, node: &mdast::Node, cx: &mut NodeC
             val.children.iter().for_each(|c| {
                 text.push_str(&parse_paragraph(paragraph, c, cx));
             });
-        }
+        },
         Node::Text(val) => {
             text = val.value.clone();
             paragraph.push_str(&val.value)
-        }
+        },
         Node::Emphasis(val) => {
             let mut child_paragraph = Paragraph::default();
             for child in val.children.iter() {
@@ -82,7 +81,7 @@ fn parse_paragraph(paragraph: &mut Paragraph, node: &mdast::Node, cx: &mut NodeC
             paragraph.push(
                 InlineNode::new(&text).marks(vec![(0..text.len(), TextMark::default().italic())]),
             );
-        }
+        },
         Node::Strong(val) => {
             let mut child_paragraph = Paragraph::default();
             for child in val.children.iter() {
@@ -91,7 +90,7 @@ fn parse_paragraph(paragraph: &mut Paragraph, node: &mdast::Node, cx: &mut NodeC
             paragraph.push(
                 InlineNode::new(&text).marks(vec![(0..text.len(), TextMark::default().bold())]),
             );
-        }
+        },
         Node::Delete(val) => {
             let mut child_paragraph = Paragraph::default();
             for child in val.children.iter() {
@@ -101,13 +100,13 @@ fn parse_paragraph(paragraph: &mut Paragraph, node: &mdast::Node, cx: &mut NodeC
                 InlineNode::new(&text)
                     .marks(vec![(0..text.len(), TextMark::default().strikethrough())]),
             );
-        }
+        },
         Node::InlineCode(val) => {
             text = val.value.clone();
             paragraph.push(
                 InlineNode::new(&text).marks(vec![(0..text.len(), TextMark::default().code())]),
             );
-        }
+        },
         Node::Link(val) => {
             let link_mark = Some(LinkMark {
                 url: val.url.clone().into(),
@@ -137,7 +136,7 @@ fn parse_paragraph(paragraph: &mut Paragraph, node: &mdast::Node, cx: &mut NodeC
             }
 
             paragraph.merge(child_paragraph);
-        }
+        },
         Node::Image(raw) => {
             paragraph.push_image(ImageNode {
                 url: raw.url.clone().into(),
@@ -145,26 +144,21 @@ fn parse_paragraph(paragraph: &mut Paragraph, node: &mdast::Node, cx: &mut NodeC
                 alt: Some(raw.alt.clone().into()),
                 ..Default::default()
             });
-        }
+        },
         Node::InlineMath(raw) => {
             text = raw.value.clone();
             paragraph.push(
                 InlineNode::new(&text).marks(vec![(0..text.len(), TextMark::default().code())]),
             );
-        }
+        },
         Node::MdxTextExpression(raw) => {
             text = raw.value.clone();
             paragraph
                 .push(InlineNode::new(&text).marks(vec![(0..text.len(), TextMark::default())]));
-        }
+        },
         Node::Html(val) => match super::html::parse(&val.value, cx) {
             Ok(el) => {
-                if el
-                    .blocks
-                    .first()
-                    .map(|node| node.is_break())
-                    .unwrap_or(false)
-                {
+                if el.is_break() {
                     text = "\n".to_owned();
                     paragraph.push(InlineNode::new(&text));
                 } else {
@@ -172,14 +166,14 @@ fn parse_paragraph(paragraph: &mut Paragraph, node: &mdast::Node, cx: &mut NodeC
                         tracing::warn!("unsupported inline html tag: {:#?}", el);
                     }
                 }
-            }
+            },
             Err(err) => {
                 if cfg!(debug_assertions) {
                     tracing::warn!("failed parsing html: {:#?}", err);
                 }
 
                 text.push_str(&val.value);
-            }
+            },
         },
         Node::FootnoteReference(foot) => {
             let prefix = format!("[{}]", foot.identifier);
@@ -190,7 +184,7 @@ fn parse_paragraph(paragraph: &mut Paragraph, node: &mdast::Node, cx: &mut NodeC
                     ..Default::default()
                 },
             )]));
-        }
+        },
         Node::LinkReference(link) => {
             let mut child_paragraph = Paragraph::default();
             let mut child_text = String::new();
@@ -211,108 +205,77 @@ fn parse_paragraph(paragraph: &mut Paragraph, node: &mdast::Node, cx: &mut NodeC
                     ..Default::default()
                 },
             )]));
-        }
+        },
         _ => {
             if cfg!(debug_assertions) {
                 tracing::warn!("unsupported inline node: {:#?}", node);
             }
-        }
+        },
     }
 
     text
 }
 
-fn ast_to_document(
-    source: &str,
-    root: mdast::Node,
-    cx: &mut NodeContext,
-    highlight_theme: &HighlightTheme,
-) -> ParsedDocument {
-    let root = match root {
-        Node::Root(r) => r,
-        _ => panic!("expected root node"),
-    };
-
-    let blocks = root
-        .children
-        .into_iter()
-        .map(|c| ast_to_node(c, cx, highlight_theme))
-        .collect();
-    ParsedDocument {
-        source: source.to_string().into(),
-        blocks,
-    }
-}
-
-fn new_span(pos: Option<markdown::unist::Position>, cx: &NodeContext) -> Option<Span> {
-    let pos = pos?;
-
-    Some(Span {
-        start: cx.offset + pos.start.offset,
-        end: cx.offset + pos.end.offset,
-    })
-}
-
 fn ast_to_node(
     value: mdast::Node,
+    style: &TextViewStyle,
     cx: &mut NodeContext,
     highlight_theme: &HighlightTheme,
-) -> BlockNode {
+) -> node::Node {
     match value {
-        Node::Root(_) => unreachable!("node::Root should be handled separately"),
+        Node::Root(val) => {
+            let children = val
+                .children
+                .into_iter()
+                .map(|c| ast_to_node(c, style, cx, highlight_theme))
+                .collect();
+            node::Node::Root { children }
+        },
         Node::Paragraph(val) => {
             let mut paragraph = Paragraph::default();
             val.children.iter().for_each(|c| {
                 parse_paragraph(&mut paragraph, c, cx);
             });
-            paragraph.span = new_span(val.position, cx);
-            BlockNode::Paragraph(paragraph)
-        }
+
+            node::Node::Paragraph(paragraph)
+        },
         Node::Blockquote(val) => {
             let children = val
                 .children
                 .into_iter()
-                .map(|c| ast_to_node(c, cx, highlight_theme))
+                .map(|c| ast_to_node(c, style, cx, highlight_theme))
                 .collect();
-            BlockNode::Blockquote {
-                children,
-                span: new_span(val.position, cx),
-            }
-        }
+            node::Node::Blockquote { children }
+        },
         Node::List(list) => {
             let children = list
                 .children
                 .into_iter()
-                .map(|c| ast_to_node(c, cx, highlight_theme))
+                .map(|c| ast_to_node(c, style, cx, highlight_theme))
                 .collect();
-            BlockNode::List {
+            node::Node::List {
                 ordered: list.ordered,
                 children,
-                span: new_span(list.position, cx),
             }
-        }
+        },
         Node::ListItem(val) => {
             let children = val
                 .children
                 .into_iter()
-                .map(|c| ast_to_node(c, cx, highlight_theme))
+                .map(|c| ast_to_node(c, style, cx, highlight_theme))
                 .collect();
-            BlockNode::ListItem {
+            node::Node::ListItem {
                 children,
                 spread: val.spread,
                 checked: val.checked,
-                span: new_span(val.position, cx),
             }
-        }
-        Node::Break(val) => BlockNode::Break {
-            html: false,
-            span: new_span(val.position, cx),
         },
-        Node::Code(raw) => BlockNode::CodeBlock(CodeBlock::new(
+        Node::Break(_) => node::Node::Break { html: false },
+        Node::Code(raw) => node::Node::CodeBlock(CodeBlock::new(
             raw.value.into(),
             raw.lang.map(|s| s.into()),
+            style,
             highlight_theme,
-            new_span(raw.position, cx),
         )),
         Node::Heading(val) => {
             let mut paragraph = Paragraph::default();
@@ -320,68 +283,57 @@ fn ast_to_node(
                 parse_paragraph(&mut paragraph, c, cx);
             });
 
-            BlockNode::Heading {
+            node::Node::Heading {
                 level: val.depth,
                 children: paragraph,
-                span: new_span(val.position, cx),
             }
-        }
-        Node::Math(val) => BlockNode::CodeBlock(CodeBlock::new(
-            val.value.into(),
-            None,
-            highlight_theme,
-            new_span(val.position, cx),
-        )),
+        },
+        Node::Math(val) => {
+            node::Node::CodeBlock(CodeBlock::new(val.value.into(), None, style, highlight_theme))
+        },
         Node::Html(val) => match super::html::parse(&val.value, cx) {
-            Ok(el) => BlockNode::Root {
-                children: el.blocks,
-                span: new_span(val.position, cx),
-            },
+            Ok(el) => el,
             Err(err) => {
                 if cfg!(debug_assertions) {
                     tracing::warn!("error parsing html: {:#?}", err);
                 }
 
-                BlockNode::Paragraph(Paragraph::new(val.value))
-            }
+                node::Node::Paragraph(Paragraph::new(val.value))
+            },
         },
-        Node::MdxFlowExpression(val) => BlockNode::CodeBlock(CodeBlock::new(
+        Node::MdxFlowExpression(val) => node::Node::CodeBlock(CodeBlock::new(
             val.value.into(),
             Some("mdx".into()),
+            style,
             highlight_theme,
-            new_span(val.position, cx),
         )),
-        Node::Yaml(val) => BlockNode::CodeBlock(CodeBlock::new(
+        Node::Yaml(val) => node::Node::CodeBlock(CodeBlock::new(
             val.value.into(),
             Some("yml".into()),
+            style,
             highlight_theme,
-            new_span(val.position, cx),
         )),
-        Node::Toml(val) => BlockNode::CodeBlock(CodeBlock::new(
+        Node::Toml(val) => node::Node::CodeBlock(CodeBlock::new(
             val.value.into(),
             Some("toml".into()),
+            style,
             highlight_theme,
-            new_span(val.position, cx),
         )),
         Node::MdxJsxTextElement(val) => {
             let mut paragraph = Paragraph::default();
             val.children.iter().for_each(|c| {
                 parse_paragraph(&mut paragraph, c, cx);
             });
-            paragraph.span = new_span(val.position, cx);
-            BlockNode::Paragraph(paragraph)
-        }
+            node::Node::Paragraph(paragraph)
+        },
         Node::MdxJsxFlowElement(val) => {
             let mut paragraph = Paragraph::default();
             val.children.iter().for_each(|c| {
                 parse_paragraph(&mut paragraph, c, cx);
             });
-            paragraph.span = new_span(val.position, cx);
-            BlockNode::Paragraph(paragraph)
-        }
-        Node::ThematicBreak(val) => BlockNode::Divider {
-            span: new_span(val.position, cx),
+            node::Node::Paragraph(paragraph)
         },
+        Node::ThematicBreak(_) => node::Node::Divider,
         Node::Table(val) => {
             let mut table = Table::default();
             table.column_aligns = val
@@ -395,10 +347,9 @@ fn ast_to_node(
                     parse_table_row(&mut table, row, cx);
                 }
             });
-            table.span = new_span(val.position, cx);
 
-            BlockNode::Table(table)
-        }
+            node::Node::Table(table)
+        },
         Node::FootnoteDefinition(def) => {
             let mut paragraph = Paragraph::default();
             let prefix = format!("[{}]: ", def.identifier);
@@ -413,9 +364,8 @@ fn ast_to_node(
             def.children.iter().for_each(|c| {
                 parse_paragraph(&mut paragraph, c, cx);
             });
-            paragraph.span = new_span(def.position, cx);
-            BlockNode::Paragraph(paragraph)
-        }
+            node::Node::Paragraph(paragraph)
+        },
         Node::Definition(def) => {
             cx.add_ref(
                 def.identifier.clone().into(),
@@ -426,18 +376,17 @@ fn ast_to_node(
                 },
             );
 
-            BlockNode::Definition {
+            node::Node::Definition {
                 identifier: def.identifier.clone().into(),
                 url: def.url.clone().into(),
                 title: def.title.clone().map(|s| s.into()),
-                span: new_span(def.position, cx),
             }
-        }
+        },
         _ => {
             if cfg!(debug_assertions) {
                 tracing::warn!("unsupported node: {:#?}", value);
             }
-            BlockNode::Unknown
-        }
+            node::Node::Unknown
+        },
     }
 }

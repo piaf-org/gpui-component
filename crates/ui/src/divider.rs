@@ -98,12 +98,12 @@ impl Divider {
                             let x = bounds.origin.x;
                             let y = bounds.origin.y + px(0.5);
                             (point(x, y), point(x + bounds.size.width, y))
-                        }
+                        },
                         Axis::Vertical => {
                             let x = bounds.origin.x + px(0.5);
                             let y = bounds.origin.y;
                             (point(x, y), point(x, y + bounds.size.height))
-                        }
+                        },
                     };
                     builder.move_to(start);
                     builder.line_to(end);

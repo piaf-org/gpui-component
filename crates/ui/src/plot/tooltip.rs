@@ -1,5 +1,5 @@
 use gpui::{
-    AnyElement, App, Div, Half as _, Hsla, IntoElement, ParentElement, Pixels, Point, RenderOnce,
+    AnyElement, App, Div, Hsla, IntoElement, ParentElement, Pixels, Point, RenderOnce,
     StyleRefinement, Styled, Window, div, prelude::FluentBuilder, px,
 };
 
@@ -274,7 +274,7 @@ impl RenderOnce for Tooltip {
                         .p_2()
                         .border_1()
                         .border_color(cx.theme().border)
-                        .rounded(cx.theme().radius.half())
+                        .rounded_sm()
                         .bg(cx.theme().background.opacity(0.9))
                         .when_some(self.position, |this, position| {
                             if position == TooltipPosition::Left {

@@ -1,31 +1,26 @@
 use gpui::{
-    App, AppContext, Context, Corner, Div, ElementId, Entity, EventEmitter, FocusHandle, Focusable,
-    Hsla, InteractiveElement as _, IntoElement, KeyBinding, ParentElement, Render, RenderOnce,
-    SharedString, Stateful, StatefulInteractiveElement as _, StyleRefinement, Styled, Subscription,
-    TextAlign, Window, div, hsla, linear_color_stop, linear_gradient, prelude::FluentBuilder as _,
+    App, AppContext, Bounds, ClickEvent, Context, Corner, Div, ElementId, Entity, EventEmitter,
+    FocusHandle, Focusable, Hsla, InteractiveElement as _, IntoElement, KeyBinding, MouseButton,
+    ParentElement, Pixels, Point, Render, RenderOnce, SharedString, Stateful,
+    StatefulInteractiveElement as _, StyleRefinement, Styled, Subscription, Window, anchored,
+    canvas, deferred, div, prelude::FluentBuilder as _, px, relative,
 };
-use rust_i18n::t;
 
 use crate::{
-    ActiveTheme as _, Colorize as _, Icon, Selectable, Sizable, Size, StyleSized,
-    actions::Confirm,
+    ActiveTheme as _, Colorize as _, FocusableExt as _, Icon, Selectable as _, Sizable, Size,
+    StyleSized, StyledExt,
+    actions::{Cancel, Confirm},
+    button::{Button, ButtonVariants},
     divider::Divider,
     h_flex,
     input::{Input, InputEvent, InputState},
-    popover::Popover,
-    slider::{Slider, SliderEvent, SliderState},
-    tab::{Tab, TabBar},
-    tooltip::{ManagedTooltipExt as _, Tooltip},
+    tooltip::Tooltip,
     v_flex,
 };
 
 const CONTEXT: &'static str = "ColorPicker";
-pub(crate) fn init(cx: &mut App) {
-    cx.bind_keys([KeyBinding::new(
-        "enter",
-        Confirm { secondary: false },
-        Some(CONTEXT),
-    )])
+pub fn init(cx: &mut App) {
+    cx.bind_keys([KeyBinding::new("escape", Cancel, Some(CONTEXT))])
 }
 
 /// Events emitted by the [`ColorPicker`].
@@ -62,175 +57,57 @@ fn color_palettes() -> Vec<Vec<Hsla>> {
     ]
 }
 
-#[derive(Clone)]
-struct HslaSliders {
-    hue: Entity<SliderState>,
-    saturation: Entity<SliderState>,
-    lightness: Entity<SliderState>,
-    alpha: Entity<SliderState>,
-}
-
-impl HslaSliders {
-    fn new(cx: &mut App) -> Self {
-        Self {
-            hue: cx.new(|_| {
-                SliderState::new()
-                    .min(0.)
-                    .max(1.)
-                    .step(0.01)
-                    .default_value(0.)
-            }),
-            saturation: cx.new(|_| {
-                SliderState::new()
-                    .min(0.)
-                    .max(1.)
-                    .step(0.01)
-                    .default_value(0.)
-            }),
-            lightness: cx.new(|_| {
-                SliderState::new()
-                    .min(0.)
-                    .max(1.)
-                    .step(0.01)
-                    .default_value(0.)
-            }),
-            alpha: cx.new(|_| {
-                SliderState::new()
-                    .min(0.)
-                    .max(1.)
-                    .step(0.01)
-                    .default_value(0.)
-            }),
-        }
-    }
-
-    fn read(&self, cx: &App) -> Hsla {
-        hsla(
-            self.hue.read(cx).value().start(),
-            self.saturation.read(cx).value().start(),
-            self.lightness.read(cx).value().start(),
-            self.alpha.read(cx).value().start(),
-        )
-    }
-
-    fn update(&self, new_color: Hsla, window: &mut Window, cx: &mut App) {
-        self.hue.update(cx, |slider, cx| {
-            slider.set_value(new_color.h, window, cx);
-        });
-        self.saturation.update(cx, |slider, cx| {
-            slider.set_value(new_color.s, window, cx);
-        });
-        self.lightness.update(cx, |slider, cx| {
-            slider.set_value(new_color.l, window, cx);
-        });
-        self.alpha.update(cx, |slider, cx| {
-            slider.set_value(new_color.a, window, cx);
-        });
-    }
-}
-
 /// State of the [`ColorPicker`].
 pub struct ColorPickerState {
     focus_handle: FocusHandle,
     value: Option<Hsla>,
     hovered_color: Option<Hsla>,
     state: Entity<InputState>,
-    hsla_sliders: HslaSliders,
-    needs_slider_sync: bool,
-    suppress_input_change: bool,
-    active_tab: usize,
     open: bool,
+    bounds: Bounds<Pixels>,
     _subscriptions: Vec<Subscription>,
 }
 
 impl ColorPickerState {
     /// Create a new [`ColorPickerState`].
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let state = cx.new(|cx| {
-            InputState::new(window, cx).pattern(regex::Regex::new(r"^#[0-9a-fA-F]{0,8}$").unwrap())
-        });
-        let hsla_sliders = HslaSliders::new(cx);
+        let state = cx.new(|cx| InputState::new(window, cx));
 
-        let mut _subscriptions = vec![
-            cx.subscribe_in(
-                &state,
-                window,
-                |this, state, ev: &InputEvent, window, cx| match ev {
-                    InputEvent::Change => {
-                        if this.suppress_input_change {
-                            this.suppress_input_change = false;
-                            return;
-                        }
-                        let value = state.read(cx).value();
-                        if let Ok(color) = Hsla::parse_hex(value.as_str()) {
-                            this.hovered_color = Some(color);
-                            this.sync_sliders(Some(color), window, cx);
-                        }
+        let _subscriptions = vec![cx.subscribe_in(
+            &state,
+            window,
+            |this, state, ev: &InputEvent, window, cx| match ev {
+                InputEvent::Change => {
+                    let value = state.read(cx).value();
+                    if let Ok(color) = Hsla::parse_hex(value.as_str()) {
+                        this.hovered_color = Some(color);
                     }
-                    InputEvent::PressEnter { .. } => {
-                        let val = this.state.read(cx).value();
-                        if let Ok(color) = Hsla::parse_hex(&val) {
-                            this.open = false;
-                            this.update_value(Some(color), true, window, cx);
-                        }
+                },
+                InputEvent::PressEnter { .. } => {
+                    let val = this.state.read(cx).value();
+                    if let Ok(color) = Hsla::parse_hex(&val) {
+                        this.open = false;
+                        this.update_value(Some(color), true, window, cx);
                     }
-                    _ => {}
                 },
-            ),
-            cx.subscribe_in(
-                &hsla_sliders.hue,
-                window,
-                |this, _, _: &SliderEvent, window, cx| {
-                    let color = this.hsla_sliders.read(cx);
-                    this.update_value_from_slider(color, true, window, cx);
-                },
-            ),
-            cx.subscribe_in(
-                &hsla_sliders.saturation,
-                window,
-                |this, _, _: &SliderEvent, window, cx| {
-                    let color = this.hsla_sliders.read(cx);
-                    this.update_value_from_slider(color, true, window, cx);
-                },
-            ),
-            cx.subscribe_in(
-                &hsla_sliders.lightness,
-                window,
-                |this, _, _: &SliderEvent, window, cx| {
-                    let color = this.hsla_sliders.read(cx);
-                    this.update_value_from_slider(color, true, window, cx);
-                },
-            ),
-            cx.subscribe_in(
-                &hsla_sliders.alpha,
-                window,
-                |this, _, _: &SliderEvent, window, cx| {
-                    let color = this.hsla_sliders.read(cx);
-                    this.update_value_from_slider(color, true, window, cx);
-                },
-            ),
-        ];
+                _ => {},
+            },
+        )];
 
         Self {
             focus_handle: cx.focus_handle(),
             value: None,
             hovered_color: None,
             state,
-            hsla_sliders,
-            needs_slider_sync: false,
-            suppress_input_change: false,
-            active_tab: 0,
             open: false,
+            bounds: Bounds::default(),
             _subscriptions,
         }
     }
 
     /// Set default color value.
     pub fn default_value(mut self, value: impl Into<Hsla>) -> Self {
-        let value = value.into();
-        self.value = Some(value);
-        self.hovered_color = Some(value);
-        self.needs_slider_sync = true;
+        self.value = Some(value.into());
         self
     }
 
@@ -249,7 +126,30 @@ impl ColorPickerState {
         self.value
     }
 
+    fn on_escape(&mut self, _: &Cancel, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.open {
+            cx.propagate();
+        }
+
+        self.open = false;
+        if self.hovered_color != self.value {
+            let color = self.value;
+            self.hovered_color = color;
+            if let Some(color) = color {
+                self.state.update(cx, |input, cx| {
+                    input.set_value(color.to_hex(), window, cx);
+                });
+            }
+        }
+        cx.notify();
+    }
+
     fn on_confirm(&mut self, _: &Confirm, _: &mut Window, cx: &mut Context<Self>) {
+        self.open = !self.open;
+        cx.notify();
+    }
+
+    fn toggle_picker(&mut self, _: &ClickEvent, _: &mut Window, cx: &mut Context<Self>) {
         self.open = !self.open;
         cx.notify();
     }
@@ -261,12 +161,8 @@ impl ColorPickerState {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.needs_slider_sync = false;
         self.value = value;
         self.hovered_color = value;
-        // Suppress the InputEvent::Change that set_value will trigger, to avoid
-        // the Hsla→hex→Hsla precision loss from feeding back into sync_sliders.
-        self.suppress_input_change = true;
         self.state.update(cx, |view, cx| {
             if let Some(value) = value {
                 view.set_value(value.to_hex(), window, cx);
@@ -274,41 +170,10 @@ impl ColorPickerState {
                 view.set_value("", window, cx);
             }
         });
-        // Sync sliders directly with the full-precision value instead of relying
-        // on the InputEvent::Change → parse_hex round-trip.
-        self.sync_sliders(value, window, cx);
         if emit {
             cx.emit(ColorPickerEvent::Change(value));
         }
         cx.notify();
-    }
-
-    fn update_value_from_slider(
-        &mut self,
-        value: Hsla,
-        emit: bool,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.needs_slider_sync = false;
-        self.value = Some(value);
-        self.hovered_color = Some(value);
-        // Keep the hex input in sync with the slider, but suppress the resulting
-        // InputEvent::Change to avoid the Hsla→hex→Hsla precision loss loop.
-        self.suppress_input_change = true;
-        self.state.update(cx, |view, cx| {
-            view.set_value(value.to_hex(), window, cx);
-        });
-        if emit {
-            cx.emit(ColorPickerEvent::Change(Some(value)));
-        }
-        cx.notify();
-    }
-
-    fn sync_sliders(&mut self, color: Option<Hsla>, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(color) = color {
-            self.hsla_sliders.update(color, window, cx);
-        }
     }
 }
 
@@ -420,8 +285,8 @@ impl ColorPicker {
                 .on_click(window.listener_for(
                     &state,
                     move |state, _, window, cx| {
-                        state.open = false;
                         state.update_value(Some(color), true, window, cx);
+                        state.open = false;
                         cx.notify();
                     },
                 ))
@@ -429,66 +294,6 @@ impl ColorPicker {
     }
 
     fn render_colors(&self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        self.state.update(cx, |state, cx| {
-            if state.needs_slider_sync {
-                let value = state.value;
-                state.update_value(value, false, window, cx);
-            }
-        });
-
-        let active_tab = self.state.read(cx).active_tab;
-
-        let (slider_color, hovered_color) = {
-            let state = self.state.read(cx);
-            let slider_color = state
-                .hovered_color
-                .or(state.value)
-                .unwrap_or_else(|| hsla(0., 0., 0., 1.));
-            (slider_color, state.hovered_color)
-        };
-
-        v_flex()
-            .p_0p5()
-            .gap_3()
-            .child(
-                TabBar::new("mode")
-                    .segmented()
-                    .selected_index(active_tab)
-                    .on_click(
-                        window.listener_for(&self.state, |state, ix: &usize, _, cx| {
-                            state.active_tab = *ix;
-                            cx.notify();
-                        }),
-                    )
-                    .child(Tab::new().flex_1().label(t!("ColorPicker.Palette")))
-                    .child(Tab::new().flex_1().label(t!("ColorPicker.HSLA"))),
-            )
-            .child(match active_tab {
-                0 => self.render_palette_panel(window, cx).into_any_element(),
-                _ => self
-                    .render_slider_tab_panel(slider_color, cx)
-                    .into_any_element(),
-            })
-            .when_some(hovered_color, |this, hovered_color| {
-                this.child(Divider::horizontal()).child(
-                    h_flex()
-                        .gap_2()
-                        .items_center()
-                        .child(
-                            div()
-                                .bg(hovered_color)
-                                .flex_shrink_0()
-                                .border_1()
-                                .border_color(hovered_color.darken(0.2))
-                                .size_5()
-                                .rounded(cx.theme().radius),
-                        )
-                        .child(Input::new(&self.state.read(cx).state).small()),
-                )
-            })
-    }
-
-    fn render_palette_panel(&self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let featured_colors = self.featured_colors.clone().unwrap_or(vec![
             cx.theme().red,
             cx.theme().red_light,
@@ -503,6 +308,19 @@ impl ColorPicker {
             cx.theme().magenta,
             cx.theme().magenta_light,
         ]);
+
+        let state = self.state.clone();
+        // If the input value is empty, fill it with the current value.
+        let input_value = state.read(cx).state.read(cx).value();
+        if input_value.is_empty()
+            && let Some(value) = state.read(cx).value
+        {
+            state.update(cx, |state, cx| {
+                state.state.update(cx, |input, cx| {
+                    input.set_value(value.to_hex(), window, cx);
+                });
+            });
+        }
 
         v_flex()
             .gap_3()
@@ -526,200 +344,32 @@ impl ColorPicker {
                         )
                     })),
             )
-    }
-
-    fn render_slider_tab_panel(&self, slider_color: Hsla, cx: &mut App) -> impl IntoElement {
-        let hsla_sliders = self.state.read(cx).hsla_sliders.clone();
-        let steps = 96usize;
-        let hue_colors = (0..steps)
-            .map(|ix| {
-                let h = ix as f32 / (steps.saturating_sub(1)) as f32;
-                hsla(h, 1.0, 0.5, 1.0)
+            .when_some(state.read(cx).hovered_color, |this, hovered_color| {
+                this.child(Divider::horizontal()).child(
+                    h_flex()
+                        .gap_2()
+                        .items_center()
+                        .child(
+                            div()
+                                .bg(hovered_color)
+                                .flex_shrink_0()
+                                .border_1()
+                                .border_color(hovered_color.darken(0.2))
+                                .size_5()
+                                .rounded(cx.theme().radius),
+                        )
+                        .child(Input::new(&state.read(cx).state).small()),
+                )
             })
-            .collect::<Vec<_>>();
-        let saturation_start = hsla(slider_color.h, 0.0, slider_color.l, 1.0);
-        let saturation_end = hsla(slider_color.h, 1.0, slider_color.l, 1.0);
-        let lightness_colors = (0..steps)
-            .map(|ix| {
-                let l = ix as f32 / (steps.saturating_sub(1)) as f32;
-                hsla(slider_color.h, 1.0, l, 1.0)
-            })
-            .collect::<Vec<_>>();
-        let alpha_start = hsla(slider_color.h, slider_color.s, slider_color.l, 0.0);
-        let alpha_end = hsla(slider_color.h, slider_color.s, slider_color.l, 1.0);
-
-        let label_color = cx.theme().foreground.opacity(0.7);
-
-        v_flex()
-            .gap_2()
-            .child(
-                h_flex()
-                    .gap_2()
-                    .items_center()
-                    .child(
-                        div()
-                            .min_w_16()
-                            .text_xs()
-                            .text_color(label_color)
-                            .child(t!("ColorPicker.Hue")),
-                    )
-                    .child(
-                        div()
-                            .relative()
-                            .flex()
-                            .items_center()
-                            .flex_1()
-                            .h_8()
-                            .child(self.render_slider_track(hue_colors, cx))
-                            .child(
-                                Slider::new(&hsla_sliders.hue)
-                                    .flex_1()
-                                    .bg(cx.theme().transparent),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .w_10()
-                            .text_xs()
-                            .text_color(label_color)
-                            .text_align(TextAlign::Right)
-                            .child(format!("{:.0}", slider_color.h * 360.)),
-                    ),
-            )
-            .child(
-                h_flex()
-                    .gap_2()
-                    .items_center()
-                    .child(
-                        div()
-                            .min_w_16()
-                            .text_xs()
-                            .text_color(label_color)
-                            .child(t!("ColorPicker.Saturation")),
-                    )
-                    .child(
-                        div()
-                            .relative()
-                            .flex()
-                            .items_center()
-                            .flex_1()
-                            .h_8()
-                            .child(self.render_slider_track_gradient(
-                                saturation_start,
-                                saturation_end,
-                                cx,
-                            ))
-                            .child(
-                                Slider::new(&hsla_sliders.saturation)
-                                    .flex_1()
-                                    .bg(cx.theme().transparent),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .w_10()
-                            .text_xs()
-                            .text_color(label_color)
-                            .text_align(TextAlign::Right)
-                            .child(format!("{:.0}", slider_color.s * 100.)),
-                    ),
-            )
-            .child(
-                h_flex()
-                    .gap_2()
-                    .items_center()
-                    .child(
-                        div()
-                            .min_w_16()
-                            .text_xs()
-                            .text_color(label_color)
-                            .child(t!("ColorPicker.Lightness")),
-                    )
-                    .child(
-                        div()
-                            .relative()
-                            .flex()
-                            .items_center()
-                            .flex_1()
-                            .h_8()
-                            .child(self.render_slider_track(lightness_colors, cx))
-                            .child(
-                                Slider::new(&hsla_sliders.lightness)
-                                    .flex_1()
-                                    .bg(cx.theme().transparent),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .w_10()
-                            .text_xs()
-                            .text_color(label_color)
-                            .text_align(TextAlign::Right)
-                            .child(format!("{:.0}", slider_color.l * 100.)),
-                    ),
-            )
-            .child(
-                h_flex()
-                    .gap_2()
-                    .items_center()
-                    .child(
-                        div()
-                            .min_w_16()
-                            .text_xs()
-                            .text_color(label_color)
-                            .child(t!("ColorPicker.Alpha")),
-                    )
-                    .child(
-                        div()
-                            .relative()
-                            .flex()
-                            .items_center()
-                            .flex_1()
-                            .h_8()
-                            .child(self.render_slider_track_gradient(alpha_start, alpha_end, cx))
-                            .child(
-                                Slider::new(&hsla_sliders.alpha)
-                                    .flex_1()
-                                    .bg(cx.theme().transparent),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .w_10()
-                            .text_xs()
-                            .text_color(label_color)
-                            .text_align(TextAlign::Right)
-                            .child(format!("{:.0}", slider_color.a * 100.)),
-                    ),
-            )
     }
 
-    fn render_slider_track(&self, colors: Vec<Hsla>, _: &App) -> impl IntoElement {
-        h_flex()
-            .absolute()
-            .left_0()
-            .right_0()
-            .h_2_5()
-            .overflow_hidden()
-            .children(
-                colors
-                    .into_iter()
-                    .map(|color| div().flex_1().h_full().bg(color)),
-            )
-    }
-
-    fn render_slider_track_gradient(&self, start: Hsla, end: Hsla, _: &App) -> impl IntoElement {
-        div()
-            .absolute()
-            .left_0()
-            .right_0()
-            .h_2_5()
-            .overflow_hidden()
-            .bg(linear_gradient(
-                90.,
-                linear_color_stop(start, 0.),
-                linear_color_stop(end, 1.),
-            ))
+    fn resolved_corner(&self, bounds: Bounds<Pixels>) -> Point<Pixels> {
+        bounds.corner(match self.anchor {
+            Corner::TopLeft => Corner::BottomLeft,
+            Corner::TopRight => Corner::BottomRight,
+            Corner::BottomLeft => Corner::TopLeft,
+            Corner::BottomRight => Corner::TopRight,
+        })
     }
 }
 
@@ -745,6 +395,7 @@ impl Styled for ColorPicker {
 impl RenderOnce for ColorPicker {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let state = self.state.read(cx);
+        let bounds = state.bounds;
         let display_title: SharedString = if let Some(value) = state.value {
             value.to_hex()
         } else {
@@ -752,100 +403,107 @@ impl RenderOnce for ColorPicker {
         }
         .into();
 
+        let is_focused = state.focus_handle.is_focused(window);
         let focus_handle = state.focus_handle.clone().tab_stop(true);
 
         div()
             .id(self.id.clone())
             .key_context(CONTEXT)
             .track_focus(&focus_handle)
+            .on_action(window.listener_for(&self.state, ColorPickerState::on_escape))
             .on_action(window.listener_for(&self.state, ColorPickerState::on_confirm))
             .child(
-                Popover::new("popover")
-                    .open(state.open)
-                    .w_72()
-                    .on_open_change(
-                        window.listener_for(&self.state, |this, open: &bool, _, cx| {
-                            this.open = *open;
-                            cx.notify();
-                        }),
-                    )
-                    .trigger(ColorPickerButton {
-                        id: "trigger".into(),
-                        size: self.size,
-                        label: self.label.clone(),
-                        value: state.value,
-                        tooltip: if display_title.is_empty() {
-                            None
-                        } else {
-                            Some(display_title.clone())
-                        },
-                        icon: self.icon.clone(),
-                        selected: false,
+                h_flex()
+                    .id("color-picker-input")
+                    .gap_2()
+                    .items_center()
+                    .input_text_size(self.size)
+                    .line_height(relative(1.))
+                    .rounded(cx.theme().radius)
+                    .refine_style(&self.style)
+                    .when_some(self.icon.clone(), |this, icon| {
+                        this.child(
+                            Button::new("btn")
+                                .track_focus(&focus_handle)
+                                .ghost()
+                                .selected(state.open)
+                                .with_size(self.size)
+                                .icon(icon.clone()),
+                        )
                     })
-                    .child(self.render_colors(window, cx)),
+                    .when_none(&self.icon, |this| {
+                        this.child(
+                            div()
+                                .id("color-picker-square")
+                                .bg(cx.theme().background)
+                                .border_1()
+                                .m_1()
+                                .border_color(cx.theme().input)
+                                .shadow_xs()
+                                .rounded(cx.theme().radius)
+                                .overflow_hidden()
+                                .size_with(self.size)
+                                .when_some(state.value, |this, value| {
+                                    this.bg(value)
+                                        .border_color(value.darken(0.3))
+                                        .when(state.open, |this| this.border_2())
+                                })
+                                .when(!display_title.is_empty(), |this| {
+                                    this.tooltip(move |_, cx| {
+                                        cx.new(|_| Tooltip::new(display_title.clone())).into()
+                                    })
+                                }),
+                        )
+                        .focus_ring(is_focused, px(0.), window, cx)
+                    })
+                    .when_some(self.label.clone(), |this, label| this.child(label))
+                    .on_click(window.listener_for(&self.state, ColorPickerState::toggle_picker))
+                    .child(
+                        canvas(
+                            {
+                                let state = self.state.clone();
+                                move |bounds, _, cx| state.update(cx, |r, _| r.bounds = bounds)
+                            },
+                            |_, _, _, _| {},
+                        )
+                        .absolute()
+                        .size_full(),
+                    ),
             )
-    }
-}
-
-#[derive(IntoElement)]
-struct ColorPickerButton {
-    id: ElementId,
-    selected: bool,
-    icon: Option<Icon>,
-    value: Option<Hsla>,
-    size: Size,
-    label: Option<SharedString>,
-    tooltip: Option<SharedString>,
-}
-
-impl Selectable for ColorPickerButton {
-    fn selected(mut self, selected: bool) -> Self {
-        self.selected = selected;
-        self
-    }
-
-    fn is_selected(&self) -> bool {
-        self.selected
-    }
-}
-
-impl Sizable for ColorPickerButton {
-    fn with_size(mut self, size: impl Into<Size>) -> Self {
-        self.size = size.into();
-        self
-    }
-}
-
-impl RenderOnce for ColorPickerButton {
-    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
-        let has_icon = self.icon.is_some();
-        h_flex()
-            .id(self.id)
-            .gap_2()
-            .children(self.icon)
-            .when(!has_icon, |this| {
+            .when(state.open, |this| {
                 this.child(
-                    div()
-                        .id("square")
-                        .bg(cx.theme().background)
-                        .border_1()
-                        .border_color(cx.theme().input)
-                        .when(cx.theme().shadow, |this| this.shadow_xs())
-                        .rounded(cx.theme().radius)
-                        .overflow_hidden()
-                        .size_with(self.size)
-                        .when_some(self.value, |this, value| {
-                            this.bg(value)
-                                .border_color(value.darken(0.3))
-                                .when(self.selected, |this| this.border_2())
-                        })
-                        .when_some(self.tooltip, |this, tooltip| {
-                            this.managed_tooltip(move |window, cx| {
-                                Tooltip::new(tooltip.clone()).build(window, cx)
-                            })
-                        }),
+                    deferred(
+                        anchored()
+                            .anchor(self.anchor)
+                            .snap_to_window_with_margin(px(8.))
+                            .position(self.resolved_corner(bounds))
+                            .child(
+                                div()
+                                    .occlude()
+                                    .map(|this| match self.anchor {
+                                        Corner::TopLeft | Corner::TopRight => this.mt_1p5(),
+                                        Corner::BottomLeft | Corner::BottomRight => this.mb_1p5(),
+                                    })
+                                    .w_72()
+                                    .overflow_hidden()
+                                    .rounded(cx.theme().radius)
+                                    .p_3()
+                                    .border_1()
+                                    .border_color(cx.theme().border)
+                                    .shadow_lg()
+                                    .bg(cx.theme().popover)
+                                    .text_color(cx.theme().popover_foreground)
+                                    .child(self.render_colors(window, cx))
+                                    .on_mouse_up_out(
+                                        MouseButton::Left,
+                                        window.listener_for(&self.state, |state, _, window, cx| {
+                                            state.on_escape(&Cancel, window, cx)
+                                        }),
+                                    ),
+                            ),
+                    )
+                    .with_priority(1),
                 )
             })
-            .when_some(self.label, |this, label| this.child(label))
     }
 }

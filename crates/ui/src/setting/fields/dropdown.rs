@@ -75,6 +75,7 @@ where
                             }),
                     )
                 });
+
                 menu
             })
             .into_any_element()

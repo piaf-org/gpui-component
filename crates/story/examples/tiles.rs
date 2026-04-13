@@ -104,7 +104,7 @@ impl Panel for ContainerPanel {
                 .w_24()
                 .h_6()
                 .px_0p5()
-                .rounded(cx.theme().radius_lg)
+                .rounded_lg()
                 .border_1()
                 .border_color(cx.theme().input)
                 .child(Input::new(&self.search_state).xsmall().appearance(false))
@@ -215,9 +215,7 @@ impl StoryTiles {
     ) {
         let dock_area = dock_area.clone();
         self._save_layout_task = Some(cx.spawn(async move |this, cx| {
-            cx.background_executor()
-                .timer(Duration::from_secs(10))
-                .await;
+            Timer::after(Duration::from_secs(10)).await;
 
             let _ = cx.update(|cx| {
                 let dock_area = dock_area.read(cx);
@@ -244,7 +242,7 @@ impl StoryTiles {
     }
 
     fn set_scrollbar_show(dock_area: &mut DockArea, cx: &mut App) {
-        match dock_area.center() {
+        match dock_area.items() {
             DockItem::Tiles { view, .. } => {
                 view.update(cx, |this, cx| {
                     this.set_scrollbar_show(Some(ScrollbarShow::Always), cx);
@@ -434,7 +432,7 @@ impl Render for StoryTiles {
 }
 
 fn main() {
-    let app = gpui_platform::application().with_assets(Assets);
+    let app = Application::new().with_assets(Assets);
 
     app.run(move |cx| {
         gpui_component::init(cx);
@@ -446,7 +444,6 @@ fn main() {
         cx.set_menus(vec![Menu {
             name: "GPUI App".into(),
             items: vec![MenuItem::action("Quit", Quit)],
-            disabled: false,
         }]);
         cx.activate(true);
 

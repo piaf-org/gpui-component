@@ -58,12 +58,6 @@ mod tests {
 
     #[test]
     fn test_line_column_from_to() {
-        assert_eq!(
-            Position::new(1, 2),
-            Position {
-                line: 1,
-                character: 2
-            }
-        );
+        assert_eq!(Position::new(1, 2), Position { line: 1, character: 2 });
     }
 }

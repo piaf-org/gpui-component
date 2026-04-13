@@ -92,15 +92,7 @@ impl<T> Area<T> {
 
         let mut points = vec![];
 
-        let mut first_x_tick = None;
-        let mut last_x_tick = None;
-        for (index, v) in self.data.iter().enumerate() {
-            if index == 0 {
-                first_x_tick = (self.x)(v);
-            }
-            if index == self.data.len() - 1 {
-                last_x_tick = (self.x)(v);
-            }
+        for v in self.data.iter() {
             let x_tick = (self.x)(v);
             let y_tick = (self.y1)(v);
 
@@ -143,7 +135,7 @@ impl<T> Area<T> {
                     area_builder.cubic_bezier_to(p2, c1, c2);
                     line_builder.cubic_bezier_to(p2, c1, c2);
                 }
-            }
+            },
             StrokeStyle::Linear => {
                 area_builder.move_to(points[0]);
                 line_builder.move_to(points[0]);
@@ -151,27 +143,27 @@ impl<T> Area<T> {
                     area_builder.line_to(*p);
                     line_builder.line_to(*p);
                 }
-            }
+            },
             StrokeStyle::StepAfter => {
                 area_builder.move_to(points[0]);
                 line_builder.move_to(points[0]);
-                for (i, p) in points.windows(2).enumerate() {
+                for p in points.windows(2) {
                     area_builder.line_to(Point::new(p[1].x, p[0].y));
+                    area_builder.line_to(Point::new(p[1].x, p[1].y));
                     line_builder.line_to(Point::new(p[1].x, p[0].y));
-                    // Don't draw the vertical line for the last point
-                    if i < points.len() - 2 {
-                        area_builder.line_to(p[1]);
-                        line_builder.line_to(p[1]);
-                    }
+                    line_builder.line_to(Point::new(p[1].x, p[1].y));
                 }
-            }
+            },
         }
 
         // Close path
-        if let (Some(first), Some(last), Some(y)) = (first_x_tick, last_x_tick, self.y0) {
-            area_builder.line_to(origin_point(px(last), px(y), bounds.origin));
-            area_builder.line_to(origin_point(px(first), px(y), bounds.origin));
-            area_builder.close();
+        if let Some(last) = self.data.last() {
+            let x_tick = (self.x)(last);
+            if let (Some(x), Some(y)) = (x_tick, self.y0) {
+                area_builder.line_to(origin_point(px(x), px(y), bounds.origin));
+                area_builder.line_to(origin_point(px(0.), px(y), bounds.origin));
+                area_builder.close();
+            }
         }
 
         (area_builder.build().ok(), line_builder.build().ok())

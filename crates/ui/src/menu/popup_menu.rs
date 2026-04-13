@@ -2,15 +2,15 @@ use crate::actions::{Cancel, Confirm, SelectDown, SelectUp};
 use crate::actions::{SelectLeft, SelectRight};
 use crate::menu::menu_item::MenuItemElement;
 use crate::scroll::ScrollableElement;
-use crate::{ActiveTheme, ElementExt, Icon, IconName, Sizable as _, h_flex, v_flex};
+use crate::{ActiveTheme, Icon, IconName, Sizable as _, h_flex, v_flex};
 use crate::{Side, Size, StyledExt, kbd::Kbd};
 use gpui::{
     Action, AnyElement, App, AppContext, Bounds, Context, Corner, DismissEvent, Edges, Entity,
     EventEmitter, FocusHandle, Focusable, InteractiveElement, IntoElement, KeyBinding,
     ParentElement, Pixels, Render, ScrollHandle, SharedString, StatefulInteractiveElement, Styled,
-    WeakEntity, Window, anchored, div, prelude::FluentBuilder, px, rems,
+    WeakEntity, Window, anchored, canvas, div, prelude::FluentBuilder, px, rems,
 };
-use gpui::{ClickEvent, Half, MouseDownEvent, OwnedMenuItem, Point, Subscription};
+use gpui::{ClickEvent, Half, MouseDownEvent, OwnedMenuItem, Subscription};
 use std::rc::Rc;
 
 const CONTEXT: &str = "PopupMenu";
@@ -126,14 +126,14 @@ impl PopupMenuItem {
         match &mut self {
             PopupMenuItem::Item { icon: i, .. } => {
                 *i = Some(icon.into());
-            }
+            },
             PopupMenuItem::ElementItem { icon: i, .. } => {
                 *i = Some(icon.into());
-            }
+            },
             PopupMenuItem::Submenu { icon: i, .. } => {
                 *i = Some(icon.into());
-            }
-            _ => {}
+            },
+            _ => {},
         }
         self
     }
@@ -145,11 +145,11 @@ impl PopupMenuItem {
         match &mut self {
             PopupMenuItem::Item { action: a, .. } => {
                 *a = Some(action);
-            }
+            },
             PopupMenuItem::ElementItem { action: a, .. } => {
                 *a = Some(action);
-            }
-            _ => {}
+            },
+            _ => {},
         }
         self
     }
@@ -161,14 +161,14 @@ impl PopupMenuItem {
         match &mut self {
             PopupMenuItem::Item { disabled: d, .. } => {
                 *d = disabled;
-            }
+            },
             PopupMenuItem::ElementItem { disabled: d, .. } => {
                 *d = disabled;
-            }
+            },
             PopupMenuItem::Submenu { disabled: d, .. } => {
                 *d = disabled;
-            }
-            _ => {}
+            },
+            _ => {},
         }
         self
     }
@@ -180,11 +180,11 @@ impl PopupMenuItem {
         match &mut self {
             PopupMenuItem::Item { checked: c, .. } => {
                 *c = checked;
-            }
+            },
             PopupMenuItem::ElementItem { checked: c, .. } => {
                 *c = checked;
-            }
-            _ => {}
+            },
+            _ => {},
         }
         self
     }
@@ -199,11 +199,11 @@ impl PopupMenuItem {
         match &mut self {
             PopupMenuItem::Item { handler: h, .. } => {
                 *h = Some(Rc::new(handler));
-            }
+            },
             PopupMenuItem::ElementItem { handler: h, .. } => {
                 *h = Some(Rc::new(handler));
-            }
-            _ => {}
+            },
+            _ => {},
         }
         self
     }
@@ -228,16 +228,9 @@ impl PopupMenuItem {
         !matches!(self, PopupMenuItem::Separator)
             && matches!(
                 self,
-                PopupMenuItem::Item {
-                    disabled: false,
-                    ..
-                } | PopupMenuItem::ElementItem {
-                    disabled: false,
-                    ..
-                } | PopupMenuItem::Submenu {
-                    disabled: false,
-                    ..
-                }
+                PopupMenuItem::Item { disabled: false, .. }
+                    | PopupMenuItem::ElementItem { disabled: false, .. }
+                    | PopupMenuItem::Submenu { disabled: false, .. }
             )
     }
 
@@ -250,10 +243,10 @@ impl PopupMenuItem {
         match self {
             PopupMenuItem::Item { icon, checked, .. } => {
                 icon.is_some() || (check_side.is_left() && *checked)
-            }
+            },
             PopupMenuItem::ElementItem { icon, checked, .. } => {
                 icon.is_some() || (check_side.is_left() && *checked)
-            }
+            },
             PopupMenuItem::Submenu { icon, .. } => icon.is_some(),
             _ => false,
         }
@@ -674,29 +667,18 @@ impl PopupMenu {
     {
         for item in items {
             match item.into() {
-                OwnedMenuItem::Action {
-                    name,
-                    action,
-                    checked,
-                    disabled,
-                    ..
-                } => {
-                    self = self.menu_with_check_and_disabled(
-                        name,
-                        checked,
-                        action.boxed_clone(),
-                        disabled,
-                    )
-                }
+                OwnedMenuItem::Action { name, action, .. } => {
+                    self = self.menu(name, action.boxed_clone())
+                },
                 OwnedMenuItem::Separator => {
                     self = self.separator();
-                }
+                },
                 OwnedMenuItem::Submenu(submenu) => {
                     self = self.submenu(submenu.name, window, cx, move |menu, window, cx| {
                         menu.with_menu_items(submenu.items.clone(), window, cx)
                     })
-                }
-                OwnedMenuItem::SystemMenu(_) => {}
+                },
+                OwnedMenuItem::SystemMenu(_) => {},
             }
         }
 
@@ -743,9 +725,7 @@ impl PopupMenu {
             Some(index) => {
                 let item = self.menu_items.get(index);
                 match item {
-                    Some(PopupMenuItem::Item {
-                        handler, action, ..
-                    }) => {
+                    Some(PopupMenuItem::Item { handler, action, .. }) => {
                         if let Some(handler) = handler {
                             handler(&ClickEvent::default(), window, cx);
                         } else if let Some(action) = action.as_ref() {
@@ -753,21 +733,19 @@ impl PopupMenu {
                         }
 
                         self.dismiss(&Cancel, window, cx)
-                    }
-                    Some(PopupMenuItem::ElementItem {
-                        handler, action, ..
-                    }) => {
+                    },
+                    Some(PopupMenuItem::ElementItem { handler, action, .. }) => {
                         if let Some(handler) = handler {
                             handler(&ClickEvent::default(), window, cx);
                         } else if let Some(action) = action.as_ref() {
                             self.dispatch_confirm_action(action, window, cx);
                         }
                         self.dismiss(&Cancel, window, cx)
-                    }
-                    _ => {}
+                    },
+                    _ => {},
                 }
-            }
-            _ => {}
+            },
+            _ => {},
         }
     }
 
@@ -952,33 +930,6 @@ impl PopupMenu {
         });
     }
 
-    fn handle_dismiss(
-        &mut self,
-        position: &Point<Pixels>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        // Do not dismiss, if click inside the parent menu
-        if let Some(parent) = self.parent_menu.as_ref() {
-            if let Some(parent) = parent.upgrade() {
-                if parent.read(cx).bounds.contains(position) {
-                    return;
-                }
-            }
-        }
-
-        self.dismiss(&Cancel, window, cx);
-    }
-
-    fn on_mouse_down_out(
-        &mut self,
-        e: &MouseDownEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.handle_dismiss(&e.position, window, cx);
-    }
-
     fn render_key_binding(
         &self,
         action: Option<Box<dyn Action>>,
@@ -1070,7 +1021,7 @@ impl PopupMenu {
         const INNER_PADDING: Pixels = px(8.);
 
         let is_submenu = matches!(item, PopupMenuItem::Submenu { .. });
-        let group_name = format!("{}:item-{}", cx.entity().entity_id(), ix);
+        let group_name = format!("popup-menu-item-{}", ix);
 
         let (item_height, radius) = match self.size {
             Size::Small => (px(20.), options.radius.half()),
@@ -1102,8 +1053,8 @@ impl PopupMenu {
                 .p_0()
                 .my_0p5()
                 .mx_neg_1()
-                .border_b(px(2.))
-                .border_color(cx.theme().border)
+                .h(px(1.))
+                .bg(cx.theme().border)
                 .disabled(true),
             PopupMenuItem::Label(label) => this.disabled(true).cursor_default().child(
                 h_flex()
@@ -1114,10 +1065,7 @@ impl PopupMenu {
                     .child(div().flex_1().child(label.clone())),
             ),
             PopupMenuItem::ElementItem {
-                render,
-                icon,
-                disabled,
-                ..
+                render, icon, disabled, ..
             } => this
                 .when(!disabled, |this| {
                     this.on_click(
@@ -1161,13 +1109,7 @@ impl PopupMenu {
                 .disabled(*disabled)
                 .h(item_height)
                 .gap_x_1()
-                .children(Self::render_icon(
-                    has_left_icon,
-                    is_left_check,
-                    icon.clone(),
-                    window,
-                    cx,
-                ))
+                .children(Self::render_icon(has_left_icon, is_left_check, icon.clone(), window, cx))
                 .child(
                     h_flex()
                         .w_full()
@@ -1192,7 +1134,7 @@ impl PopupMenu {
                         })
                         .children(key),
                 )
-            }
+            },
             PopupMenuItem::Submenu {
                 icon,
                 label,
@@ -1208,13 +1150,7 @@ impl PopupMenu {
                         .size_full()
                         .items_center()
                         .gap_x_1()
-                        .children(Self::render_icon(
-                            has_left_icon,
-                            false,
-                            icon.clone(),
-                            window,
-                            cx,
-                        ))
+                        .children(Self::render_icon(has_left_icon, false, icon.clone(), window, cx))
                         .child(
                             h_flex()
                                 .flex_1()
@@ -1222,11 +1158,7 @@ impl PopupMenu {
                                 .items_center()
                                 .justify_between()
                                 .child(label.clone())
-                                .child(
-                                    Icon::new(IconName::ChevronRight)
-                                        .xsmall()
-                                        .text_color(cx.theme().muted_foreground),
-                                ),
+                                .child(IconName::ChevronRight),
                         ),
                 )
                 .when(selected, |this| {
@@ -1301,11 +1233,21 @@ impl Render for PopupMenu {
             .on_action(cx.listener(Self::select_right))
             .on_action(cx.listener(Self::confirm))
             .on_action(cx.listener(Self::dismiss))
-            .on_mouse_down_out(cx.listener(Self::on_mouse_down_out))
+            .on_mouse_down_out(cx.listener(|this, ev: &MouseDownEvent, window, cx| {
+                // Do not dismiss, if click inside the parent menu
+                if let Some(parent) = this.parent_menu.as_ref() {
+                    if let Some(parent) = parent.upgrade() {
+                        if parent.read(cx).bounds.contains(&ev.position) {
+                            return;
+                        }
+                    }
+                }
+
+                this.dismiss(&Cancel, window, cx);
+            }))
             .popover_style(cx)
             .text_color(cx.theme().popover_foreground)
             .relative()
-            .occlude()
             .child(
                 v_flex()
                     .id("items")
@@ -1327,7 +1269,14 @@ impl Render for PopupMenu {
                             .filter(|(ix, item)| !(*ix + 1 == items_count && item.is_separator()))
                             .map(|(ix, item)| self.render_item(ix, item, options, window, cx)),
                     )
-                    .on_prepaint(move |bounds, _, cx| view.update(cx, |r, _| r.bounds = bounds)),
+                    .child({
+                        canvas(
+                            move |bounds, _, cx| view.update(cx, |r, _| r.bounds = bounds),
+                            |_, _, _, _| {},
+                        )
+                        .absolute()
+                        .size_full()
+                    }),
             )
             .when(self.scrollable, |this| {
                 // TODO: When the menu is limited by `overflow_y_scroll`, the sub-menu will cannot be displayed.

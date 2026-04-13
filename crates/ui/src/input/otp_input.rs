@@ -5,7 +5,7 @@ use gpui::{
     prelude::FluentBuilder, px,
 };
 
-use super::{InputEvent, blink_cursor::BlinkCursor, input::input_style};
+use super::{InputEvent, blink_cursor::BlinkCursor};
 use crate::{ActiveTheme, Disableable, Icon, IconName, Sizable, Size, h_flex, v_flex};
 
 pub struct OtpState {
@@ -114,7 +114,7 @@ impl OtpState {
 
                 window.prevent_default();
                 cx.stop_propagation();
-            }
+            },
             _ => {
                 let c = key.chars().next().unwrap();
                 if !matches!(c, '0'..='9') {
@@ -128,7 +128,7 @@ impl OtpState {
 
                 window.prevent_default();
                 cx.stop_propagation();
-            }
+            },
         }
 
         self.pause_blink_cursor(cx);
@@ -243,8 +243,6 @@ impl RenderOnce for OtpInput {
             groups.push(vec![]);
         }
 
-        let (bg, fg) = input_style(self.disabled, cx);
-
         for ix in 0..state.length {
             let c = state.value.chars().nth(ix);
             if ix % group_items_count == 0 && ix != 0 {
@@ -258,9 +256,11 @@ impl RenderOnce for OtpInput {
                     .id(ix)
                     .border_1()
                     .border_color(cx.theme().input)
-                    .bg(bg)
-                    .text_color(fg)
-                    .when(self.disabled, |this| this.opacity(0.5))
+                    .bg(cx.theme().background)
+                    .when(self.disabled, |this| {
+                        this.bg(cx.theme().muted)
+                            .text_color(cx.theme().muted_foreground)
+                    })
                     .when(is_input_focused, |this| this.border_color(cx.theme().ring))
                     .when(cx.theme().shadow, |this| this.shadow_xs())
                     .items_center()
@@ -292,7 +292,7 @@ impl RenderOnce for OtpInput {
                             } else {
                                 this.child(c.to_string())
                             }
-                        }
+                        },
                         None => this.when(is_input_focused && blink_show, |this| {
                             this.child(
                                 div()

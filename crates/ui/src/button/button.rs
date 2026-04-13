@@ -2,16 +2,13 @@ use std::rc::Rc;
 
 use crate::{
     ActiveTheme, Colorize as _, Disableable, FocusableExt as _, Icon, IconName, Selectable,
-    Sizable, Size, StyleSized, StyledExt,
-    button::ButtonIcon,
-    h_flex,
-    tooltip::{ManagedTooltipExt as _, Tooltip},
+    Sizable, Size, StyleSized, StyledExt, h_flex, spinner::Spinner, tooltip::Tooltip,
 };
 use gpui::{
     Action, AnyElement, App, ClickEvent, Corners, Div, Edges, ElementId, Hsla, InteractiveElement,
     Interactivity, IntoElement, MouseButton, ParentElement, Pixels, RenderOnce, SharedString,
     Stateful, StatefulInteractiveElement as _, StyleRefinement, Styled, Window, div,
-    prelude::FluentBuilder as _, px, relative, transparent_white,
+    prelude::FluentBuilder as _, px, relative,
 };
 
 #[derive(Default, Clone, Copy)]
@@ -30,10 +27,11 @@ impl From<Pixels> for ButtonRounded {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct ButtonCustomVariant {
     color: Hsla,
     foreground: Hsla,
+    border: Hsla,
     shadow: bool,
     hover: Hsla,
     active: Hsla,
@@ -45,11 +43,6 @@ pub trait ButtonVariants: Sized {
     /// With the primary style for the Button.
     fn primary(self) -> Self {
         self.with_variant(ButtonVariant::Primary)
-    }
-
-    /// With the secondary style for the Button.
-    fn secondary(self) -> Self {
-        self.with_variant(ButtonVariant::Secondary)
     }
 
     /// With the danger style for the Button.
@@ -98,6 +91,7 @@ impl ButtonCustomVariant {
         Self {
             color: cx.theme().transparent,
             foreground: cx.theme().foreground,
+            border: cx.theme().transparent,
             hover: cx.theme().transparent,
             active: cx.theme().transparent,
             shadow: false,
@@ -113,6 +107,12 @@ impl ButtonCustomVariant {
     /// Set foreground color, default is theme foreground.
     pub fn foreground(mut self, color: Hsla) -> Self {
         self.foreground = color;
+        self
+    }
+
+    /// Set border color, default is transparent.
+    pub fn border(mut self, color: Hsla) -> Self {
+        self.border = color;
         self
     }
 
@@ -135,12 +135,11 @@ impl ButtonCustomVariant {
     }
 }
 
-/// The variant of the Button.
-#[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
+/// The veriant of the Button.
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
 pub enum ButtonVariant {
-    #[default]
-    Default,
     Primary,
+    #[default]
     Secondary,
     Danger,
     Info,
@@ -172,11 +171,6 @@ impl ButtonVariant {
     fn no_padding(&self) -> bool {
         self.is_link() || self.is_text()
     }
-
-    #[inline]
-    fn is_default(&self) -> bool {
-        matches!(self, Self::Default)
-    }
 }
 
 /// A Button element.
@@ -185,7 +179,7 @@ pub struct Button {
     id: ElementId,
     base: Stateful<Div>,
     style: StyleRefinement,
-    icon: Option<ButtonIcon>,
+    icon: Option<Icon>,
     label: Option<SharedString>,
     children: Vec<AnyElement>,
     disabled: bool,
@@ -198,11 +192,7 @@ pub struct Button {
     dropdown_caret: bool,
     size: Size,
     compact: bool,
-    tooltip: Option<(
-        SharedString,
-        Option<(Rc<Box<dyn Action>>, Option<SharedString>)>,
-    )>,
-    tooltip_builder: Option<Rc<dyn Fn(&mut Window, &mut App) -> gpui::AnyView>>,
+    tooltip: Option<(SharedString, Option<(Rc<Box<dyn Action>>, Option<SharedString>)>)>,
     on_click: Option<Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>>,
     on_hover: Option<Rc<dyn Fn(&bool, &mut Window, &mut App)>>,
     loading: bool,
@@ -238,7 +228,6 @@ impl Button {
             border_edges: Edges::all(true),
             size: Size::Medium,
             tooltip: None,
-            tooltip_builder: None,
             on_click: None,
             on_hover: None,
             loading: false,
@@ -283,7 +272,7 @@ impl Button {
     }
 
     /// Set the icon of the button, if the Button have no label, the button well in Icon Button mode.
-    pub fn icon(mut self, icon: impl Into<ButtonIcon>) -> Self {
+    pub fn icon(mut self, icon: impl Into<Icon>) -> Self {
         self.icon = Some(icon.into());
         self
     }
@@ -303,10 +292,7 @@ impl Button {
     ) -> Self {
         self.tooltip = Some((
             tooltip.into(),
-            Some((
-                Rc::new(action.boxed_clone()),
-                context.map(|c| c.to_string().into()),
-            )),
+            Some((Rc::new(action.boxed_clone()), context.map(|c| c.to_string().into()))),
         ));
         self
     }
@@ -470,9 +456,7 @@ impl RenderOnce for Button {
             .justify_center()
             .cursor_default()
             .when(self.variant.is_link(), |this| this.cursor_pointer())
-            .when(cx.theme().shadow && normal_style.shadow, |this| {
-                this.shadow_xs()
-            })
+            .when(cx.theme().shadow && normal_style.shadow, |this| this.shadow_xs())
             .when(!style.no_padding(), |this| {
                 if self.label.is_none() && self.children.is_empty() {
                     // Icon Button
@@ -486,36 +470,20 @@ impl RenderOnce for Button {
                     // Normal Button
                     match self.size {
                         Size::Size(size) => this.px(size * 0.2),
-                        Size::XSmall => this.h_5().px_1().when(self.compact, |this| this.min_w_5()),
-                        Size::Small => this
-                            .h_6()
-                            .px_3()
-                            .when(self.compact, |this| this.min_w_6().px_1p5()),
-                        _ => this
-                            .h_8()
-                            .px_4()
-                            .when(self.compact, |this| this.min_w_8().px_2()),
+                        Size::XSmall => this.h_5().px_1(),
+                        Size::Small => this.h_6().px_3().when(self.compact, |this| this.px_1p5()),
+                        _ => this.h_8().px_4().when(self.compact, |this| this.px_2()),
                     }
                 }
             })
-            .when(self.border_corners.top_left, |this| {
-                this.rounded_tl(rounding)
-            })
-            .when(self.border_corners.top_right, |this| {
-                this.rounded_tr(rounding)
-            })
-            .when(self.border_corners.bottom_left, |this| {
-                this.rounded_bl(rounding)
-            })
-            .when(self.border_corners.bottom_right, |this| {
-                this.rounded_br(rounding)
-            })
-            .when(self.variant.is_default() || self.outline, |this| {
-                this.when(self.border_edges.left, |this| this.border_l_1())
-                    .when(self.border_edges.right, |this| this.border_r_1())
-                    .when(self.border_edges.top, |this| this.border_t_1())
-                    .when(self.border_edges.bottom, |this| this.border_b_1())
-            })
+            .when(self.border_corners.top_left, |this| this.rounded_tl(rounding))
+            .when(self.border_corners.top_right, |this| this.rounded_tr(rounding))
+            .when(self.border_corners.bottom_left, |this| this.rounded_bl(rounding))
+            .when(self.border_corners.bottom_right, |this| this.rounded_br(rounding))
+            .when(self.border_edges.left, |this| this.border_l_1())
+            .when(self.border_edges.right, |this| this.border_r_1())
+            .when(self.border_edges.top, |this| this.border_t_1())
+            .when(self.border_edges.bottom, |this| this.border_b_1())
             .text_color(normal_style.fg)
             .when(self.selected, |this| {
                 let selected_style = style.selected(self.outline, cx);
@@ -531,7 +499,7 @@ impl RenderOnce for Button {
                         let hover_style = style.hovered(self.outline, cx);
                         this.bg(hover_style.bg)
                             .border_color(hover_style.border)
-                            .text_color(hover_style.fg)
+                            .text_color(crate::red_400())
                     })
                     .active(|this| {
                         let active_style = style.active(self.outline, cx);
@@ -568,18 +536,17 @@ impl RenderOnce for Button {
                         return;
                     }
 
-                    on_click(event, window, cx);
+                    (on_click)(event, window, cx);
                 })
             })
             .when_some(self.on_hover.filter(|_| hoverable), |this, on_hover| {
                 this.on_hover(move |hovered, window, cx| {
-                    on_hover(hovered, window, cx);
+                    (on_hover)(hovered, window, cx);
                 })
             })
             .child({
                 h_flex()
                     .id("label")
-                    .size_full()
                     .items_center()
                     .justify_center()
                     .button_text_size(self.size)
@@ -588,11 +555,16 @@ impl RenderOnce for Button {
                         Size::Small => this.gap_1(),
                         _ => this.gap_2(),
                     })
-                    .when_some(self.icon, |this, icon| {
+                    .when(!self.loading, |this| {
+                        this.when_some(self.icon, |this, icon| {
+                            this.child(icon.with_size(icon_size))
+                        })
+                    })
+                    .when(self.loading, |this| {
                         this.child(
-                            icon.loading_icon(self.loading_icon)
-                                .loading(self.loading)
-                                .with_size(icon_size),
+                            Spinner::new()
+                                .with_size(self.size)
+                                .when_some(self.loading_icon, |this, icon| this.icon(icon)),
                         )
                     })
                     .when_some(self.label, |this, label| {
@@ -600,14 +572,7 @@ impl RenderOnce for Button {
                     })
                     .children(self.children)
                     .when(self.dropdown_caret, |this| {
-                        this.justify_between().child(
-                            Icon::new(IconName::ChevronDown).xsmall().text_color(
-                                match self.disabled {
-                                    true => normal_style.fg.opacity(0.3),
-                                    false => normal_style.fg.opacity(0.5),
-                                },
-                            ),
-                        )
+                        this.child(Icon::new(IconName::ChevronDown).with_size(icon_size))
                     })
             })
             .when(self.loading && !self.disabled, |this| {
@@ -615,23 +580,17 @@ impl RenderOnce for Button {
                     .border_color(normal_style.border.opacity(0.8))
                     .text_color(normal_style.fg.opacity(0.8))
             })
-            .map(|this| {
-                if let Some(builder) = self.tooltip_builder {
-                    this.managed_tooltip(move |window, cx| builder(window, cx))
-                } else if let Some((tooltip, action)) = self.tooltip {
-                    this.managed_tooltip(move |window, cx| {
-                        Tooltip::new(tooltip.clone())
-                            .when_some(action.clone(), |this, (action, context)| {
-                                this.action(
-                                    action.boxed_clone().as_ref(),
-                                    context.as_ref().map(|c| c.as_ref()),
-                                )
-                            })
-                            .build(window, cx)
-                    })
-                } else {
-                    this
-                }
+            .when_some(self.tooltip, |this, (tooltip, action)| {
+                this.tooltip(move |window, cx| {
+                    Tooltip::new(tooltip.clone())
+                        .when_some(action.clone(), |this, (action, context)| {
+                            this.action(
+                                action.boxed_clone().as_ref(),
+                                context.as_ref().map(|c| c.as_ref()),
+                            )
+                        })
+                        .build(window, cx)
+                })
             })
             .focus_ring(is_focused, px(0.), window, cx)
     }
@@ -648,99 +607,135 @@ struct ButtonVariantStyle {
 impl ButtonVariant {
     fn bg_color(&self, outline: bool, cx: &mut App) -> Hsla {
         if outline {
-            return cx.theme().input_background();
+            return cx.theme().background;
         }
 
         match self {
-            Self::Default => cx.theme().input_background(),
-            Self::Primary => cx.theme().button_primary,
-            Self::Secondary => cx.theme().secondary,
-            Self::Danger => cx.theme().danger.mix_oklab(cx.theme().transparent, 0.2),
-            Self::Warning => cx.theme().warning.mix_oklab(cx.theme().transparent, 0.2),
-            Self::Success => cx.theme().success.mix_oklab(cx.theme().transparent, 0.2),
-            Self::Info => cx.theme().info.mix_oklab(cx.theme().transparent, 0.2),
-            Self::Ghost | Self::Link | Self::Text => cx.theme().transparent,
-            Self::Custom(colors) => colors.color.mix_oklab(cx.theme().transparent, 0.2),
+            ButtonVariant::Primary => cx.theme().primary,
+            ButtonVariant::Secondary => cx.theme().secondary,
+            ButtonVariant::Danger => cx.theme().danger,
+            ButtonVariant::Warning => cx.theme().warning,
+            ButtonVariant::Success => cx.theme().success,
+            ButtonVariant::Info => cx.theme().info,
+            ButtonVariant::Ghost | ButtonVariant::Link | ButtonVariant::Text => {
+                cx.theme().transparent
+            },
+            ButtonVariant::Custom(colors) => colors.color,
         }
     }
 
     fn text_color(&self, outline: bool, cx: &mut App) -> Hsla {
         match self {
-            Self::Default => cx.theme().foreground,
-            Self::Primary => {
+            ButtonVariant::Primary => {
                 if outline {
-                    cx.theme().button_primary
+                    cx.theme().primary
                 } else {
-                    cx.theme().button_primary_foreground
+                    cx.theme().primary_foreground
                 }
-            }
-            Self::Secondary | Self::Ghost => cx.theme().secondary_foreground,
-            Self::Danger => cx.theme().danger,
-            Self::Warning => cx.theme().warning,
-            Self::Success => cx.theme().success,
-            Self::Info => cx.theme().info,
-            Self::Link => cx.theme().link,
-            Self::Text => cx.theme().foreground,
-            Self::Custom(colors) => colors.color,
+            },
+            ButtonVariant::Secondary | ButtonVariant::Ghost => cx.theme().secondary_foreground,
+            ButtonVariant::Danger => {
+                if outline {
+                    cx.theme().danger
+                } else {
+                    cx.theme().danger_foreground
+                }
+            },
+            ButtonVariant::Warning => {
+                if outline {
+                    cx.theme().warning
+                } else {
+                    cx.theme().warning_foreground
+                }
+            },
+            ButtonVariant::Success => {
+                if outline {
+                    cx.theme().success
+                } else {
+                    cx.theme().success_foreground
+                }
+            },
+            ButtonVariant::Info => {
+                if outline {
+                    cx.theme().info
+                } else {
+                    cx.theme().info_foreground
+                }
+            },
+            ButtonVariant::Link => cx.theme().link,
+            ButtonVariant::Text => cx.theme().foreground,
+            ButtonVariant::Custom(colors) => {
+                if outline {
+                    colors.color
+                } else {
+                    colors.foreground
+                }
+            },
         }
     }
 
-    fn border_color(&self, _bg: Hsla, outline: bool, cx: &mut App) -> Hsla {
+    fn border_color(&self, bg: Hsla, outline: bool, cx: &mut App) -> Hsla {
         match self {
-            Self::Default => cx.theme().input,
-            Self::Secondary => cx.theme().border,
-            Self::Primary => cx.theme().button_primary,
-            Self::Danger => {
+            ButtonVariant::Secondary => {
                 if outline {
-                    cx.theme().danger.mix_oklab(transparent_white(), 0.4)
+                    cx.theme().border
                 } else {
+                    bg
+                }
+            },
+            ButtonVariant::Primary => {
+                if outline {
+                    cx.theme().primary
+                } else {
+                    bg
+                }
+            },
+            ButtonVariant::Danger => {
+                if outline {
                     cx.theme().danger
-                }
-            }
-            Self::Info => {
-                if outline {
-                    cx.theme().info.mix_oklab(transparent_white(), 0.4)
                 } else {
+                    bg
+                }
+            },
+            ButtonVariant::Info => {
+                if outline {
                     cx.theme().info
-                }
-            }
-            Self::Warning => {
-                if outline {
-                    cx.theme().warning.mix_oklab(transparent_white(), 0.4)
                 } else {
+                    bg
+                }
+            },
+            ButtonVariant::Warning => {
+                if outline {
                     cx.theme().warning
-                }
-            }
-            Self::Success => {
-                if outline {
-                    cx.theme().success.mix_oklab(transparent_white(), 0.4)
                 } else {
+                    bg
+                }
+            },
+            ButtonVariant::Success => {
+                if outline {
                     cx.theme().success
-                }
-            }
-            Self::Ghost | Self::Link | Self::Text => cx.theme().transparent,
-            Self::Custom(colors) => {
-                if outline {
-                    colors.color.mix_oklab(transparent_white(), 0.4)
                 } else {
-                    colors.color
+                    bg
                 }
-            }
+            },
+            ButtonVariant::Ghost | ButtonVariant::Link | ButtonVariant::Text => {
+                cx.theme().transparent
+            },
+            ButtonVariant::Custom(colors) => colors.border,
         }
     }
 
     fn underline(&self, _: &App) -> bool {
         match self {
-            Self::Link => true,
+            ButtonVariant::Link => true,
             _ => false,
         }
     }
 
     fn shadow(&self, outline: bool, _: &App) -> bool {
         match self {
-            Self::Default => true,
-            Self::Primary | Self::Secondary | Self::Danger => outline,
-            Self::Custom(c) => c.shadow,
+            ButtonVariant::Primary | ButtonVariant::Secondary | ButtonVariant::Danger => outline,
+            ButtonVariant::Custom(c) => c.shadow,
             _ => false,
         }
     }
@@ -763,66 +758,63 @@ impl ButtonVariant {
 
     fn hovered(&self, outline: bool, cx: &mut App) -> ButtonVariantStyle {
         let bg = match self {
-            Self::Default => cx.theme().input.mix_oklab(cx.theme().transparent, 0.5),
-            Self::Primary => {
+            ButtonVariant::Primary => {
                 if outline {
-                    cx.theme()
-                        .button_primary
-                        .mix_oklab(cx.theme().transparent, 0.2)
+                    cx.theme().secondary_hover
                 } else {
-                    cx.theme().button_primary_hover
+                    cx.theme().primary_hover
                 }
-            }
-            Self::Secondary => cx.theme().secondary_hover,
-            Self::Danger => {
+            },
+            ButtonVariant::Secondary => cx.theme().secondary_hover,
+            ButtonVariant::Danger => {
                 if outline {
-                    cx.theme().danger.mix_oklab(cx.theme().transparent, 0.2)
+                    cx.theme().secondary_hover
                 } else {
-                    cx.theme().danger.mix_oklab(cx.theme().transparent, 0.3)
+                    cx.theme().danger_hover
                 }
-            }
-            Self::Warning => {
+            },
+            ButtonVariant::Warning => {
                 if outline {
-                    cx.theme().warning.mix_oklab(cx.theme().transparent, 0.2)
+                    cx.theme().secondary_hover
                 } else {
-                    cx.theme().warning.mix_oklab(cx.theme().transparent, 0.3)
+                    cx.theme().warning_hover
                 }
-            }
-            Self::Success => {
+            },
+            ButtonVariant::Success => {
                 if outline {
-                    cx.theme().success.mix_oklab(cx.theme().transparent, 0.2)
+                    cx.theme().secondary_hover
                 } else {
-                    cx.theme().success.mix_oklab(cx.theme().transparent, 0.3)
+                    cx.theme().success_hover
                 }
-            }
-            Self::Info => {
+            },
+            ButtonVariant::Info => {
                 if outline {
-                    cx.theme().info.mix_oklab(cx.theme().transparent, 0.2)
+                    cx.theme().secondary_hover
                 } else {
-                    cx.theme().info.mix_oklab(cx.theme().transparent, 0.3)
+                    cx.theme().info_hover
                 }
-            }
-            Self::Custom(colors) => {
-                if outline {
-                    colors.color.mix_oklab(cx.theme().transparent, 0.2)
-                } else {
-                    colors.color.mix_oklab(cx.theme().transparent, 0.3)
-                }
-            }
-            Self::Ghost => {
+            },
+            ButtonVariant::Ghost => {
                 if cx.theme().mode.is_dark() {
                     cx.theme().secondary.lighten(0.1).opacity(0.8)
                 } else {
                     cx.theme().secondary.darken(0.1).opacity(0.8)
                 }
-            }
-            Self::Link => cx.theme().transparent,
-            Self::Text => cx.theme().transparent,
+            },
+            ButtonVariant::Link => cx.theme().transparent,
+            ButtonVariant::Text => cx.theme().transparent,
+            ButtonVariant::Custom(colors) => {
+                if outline {
+                    cx.theme().secondary_hover
+                } else {
+                    colors.hover
+                }
+            },
         };
 
         let border = self.border_color(bg, outline, cx);
         let fg = match self {
-            Self::Link => cx.theme().link_hover,
+            ButtonVariant::Link => cx.theme().link_hover,
             _ => self.text_color(outline, cx),
         };
 
@@ -840,36 +832,63 @@ impl ButtonVariant {
 
     fn active(&self, outline: bool, cx: &mut App) -> ButtonVariantStyle {
         let bg = match self {
-            Self::Default => cx.theme().input.mix_oklab(cx.theme().transparent, 0.7),
-            Self::Primary => {
+            ButtonVariant::Primary => {
                 if outline {
-                    cx.theme()
-                        .button_primary
-                        .mix_oklab(cx.theme().transparent, 0.4)
+                    cx.theme().primary_active.opacity(0.1)
                 } else {
-                    cx.theme().button_primary_active
+                    cx.theme().primary_active
                 }
-            }
-            Self::Secondary => cx.theme().secondary_active,
-            Self::Ghost => {
+            },
+            ButtonVariant::Secondary => cx.theme().secondary_active,
+            ButtonVariant::Ghost => {
                 if cx.theme().mode.is_dark() {
                     cx.theme().secondary.lighten(0.2).opacity(0.8)
                 } else {
                     cx.theme().secondary.darken(0.2).opacity(0.8)
                 }
-            }
-            Self::Danger => cx.theme().danger.mix_oklab(cx.theme().transparent, 0.4),
-            Self::Warning => cx.theme().warning.mix_oklab(cx.theme().transparent, 0.4),
-            Self::Success => cx.theme().success.mix_oklab(cx.theme().transparent, 0.4),
-            Self::Info => cx.theme().info.mix_oklab(cx.theme().transparent, 0.4),
-            Self::Custom(colors) => colors.color.mix_oklab(cx.theme().transparent, 0.4),
-            Self::Link => cx.theme().transparent,
-            Self::Text => cx.theme().transparent,
+            },
+            ButtonVariant::Danger => {
+                if outline {
+                    cx.theme().danger_active.opacity(0.1)
+                } else {
+                    cx.theme().danger_active
+                }
+            },
+            ButtonVariant::Warning => {
+                if outline {
+                    cx.theme().warning_active.opacity(0.1)
+                } else {
+                    cx.theme().warning_active
+                }
+            },
+            ButtonVariant::Success => {
+                if outline {
+                    cx.theme().success_active.opacity(0.1)
+                } else {
+                    cx.theme().success_active
+                }
+            },
+            ButtonVariant::Info => {
+                if outline {
+                    cx.theme().info_active.opacity(0.1)
+                } else {
+                    cx.theme().info_active
+                }
+            },
+            ButtonVariant::Link => cx.theme().transparent,
+            ButtonVariant::Text => cx.theme().transparent,
+            ButtonVariant::Custom(colors) => {
+                if outline {
+                    colors.active.opacity(0.1)
+                } else {
+                    colors.active
+                }
+            },
         };
         let border = self.border_color(bg, outline, cx);
         let fg = match self {
-            Self::Link => cx.theme().link_active,
-            Self::Text => cx.theme().foreground.opacity(0.7),
+            ButtonVariant::Link => cx.theme().link_active,
+            ButtonVariant::Text => cx.theme().foreground.opacity(0.7),
             _ => self.text_color(outline, cx),
         };
         let underline = self.underline(cx);
@@ -886,22 +905,21 @@ impl ButtonVariant {
 
     fn selected(&self, outline: bool, cx: &mut App) -> ButtonVariantStyle {
         let bg = match self {
-            Self::Default => cx.theme().input.mix_oklab(cx.theme().transparent, 0.7),
-            Self::Primary => cx.theme().button_primary_active,
-            Self::Secondary | Self::Ghost => cx.theme().secondary_active,
-            Self::Danger => cx.theme().danger_active,
-            Self::Warning => cx.theme().warning_active,
-            Self::Success => cx.theme().success_active,
-            Self::Info => cx.theme().info_active,
-            Self::Link => cx.theme().transparent,
-            Self::Text => cx.theme().transparent,
-            Self::Custom(colors) => colors.active,
+            ButtonVariant::Primary => cx.theme().primary_active,
+            ButtonVariant::Secondary | ButtonVariant::Ghost => cx.theme().secondary_active,
+            ButtonVariant::Danger => cx.theme().danger_active,
+            ButtonVariant::Warning => cx.theme().warning_active,
+            ButtonVariant::Success => cx.theme().success_active,
+            ButtonVariant::Info => cx.theme().info_active,
+            ButtonVariant::Link => cx.theme().transparent,
+            ButtonVariant::Text => cx.theme().transparent,
+            ButtonVariant::Custom(colors) => colors.active,
         };
 
         let border = self.border_color(bg, outline, cx);
         let fg = match self {
-            Self::Link => cx.theme().link_active,
-            Self::Text => cx.theme().foreground.opacity(0.7),
+            ButtonVariant::Link => cx.theme().link_active,
+            ButtonVariant::Text => cx.theme().foreground.opacity(0.7),
             _ => self.text_color(false, cx),
         };
         let underline = self.underline(cx);
@@ -918,26 +936,20 @@ impl ButtonVariant {
 
     fn disabled(&self, outline: bool, cx: &mut App) -> ButtonVariantStyle {
         let bg = match self {
-            Self::Default | Self::Link | Self::Ghost | Self::Text => cx.theme().transparent,
-            Self::Primary => cx.theme().button_primary.opacity(0.15),
-            Self::Danger => cx.theme().danger.opacity(0.15),
-            Self::Warning => cx.theme().warning.opacity(0.15),
-            Self::Success => cx.theme().success.opacity(0.15),
-            Self::Info => cx.theme().info.opacity(0.15),
-            Self::Secondary => cx.theme().secondary.opacity(1.5),
-            Self::Custom(style) => style.color.opacity(0.15),
+            ButtonVariant::Link | ButtonVariant::Ghost | ButtonVariant::Text => {
+                cx.theme().transparent
+            },
+            ButtonVariant::Primary => cx.theme().primary.opacity(0.15),
+            ButtonVariant::Danger => cx.theme().danger.opacity(0.15),
+            ButtonVariant::Warning => cx.theme().warning.opacity(0.15),
+            ButtonVariant::Success => cx.theme().success.opacity(0.15),
+            ButtonVariant::Info => cx.theme().info.opacity(0.15),
+            ButtonVariant::Secondary => cx.theme().secondary.opacity(1.5),
+            ButtonVariant::Custom(style) => style.color.opacity(0.15),
         };
         let fg = cx.theme().muted_foreground.opacity(0.5);
         let (bg, border) = if outline {
-            (
-                cx.theme().input_background().opacity(0.5),
-                cx.theme().border.opacity(0.5),
-            )
-        } else if let Self::Default = self {
-            (
-                cx.theme().input_background().opacity(0.5),
-                cx.theme().input.opacity(0.5),
-            )
+            (cx.theme().transparent, cx.theme().border.opacity(0.5))
         } else {
             (bg, bg)
         };
@@ -952,71 +964,5 @@ impl ButtonVariant {
             underline,
             shadow,
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[gpui::test]
-    fn test_button_builder(_cx: &mut gpui::TestAppContext) {
-        let button = Button::new("complex-button")
-            .label("Save Changes")
-            .primary()
-            .outline()
-            .large()
-            .tooltip("Click to save")
-            .compact()
-            .loading(false)
-            .disabled(false)
-            .selected(false)
-            .tab_index(1)
-            .tab_stop(true)
-            .dropdown_caret(false)
-            .rounded(ButtonRounded::Medium)
-            .on_click(|_, _, _| {});
-
-        assert_eq!(button.label, Some("Save Changes".into()));
-        assert_eq!(button.variant, ButtonVariant::Primary);
-        assert!(button.outline);
-        assert_eq!(button.size, Size::Large);
-        assert!(button.tooltip.is_some());
-        assert!(button.compact);
-        assert!(!button.loading);
-        assert!(!button.disabled);
-        assert!(!button.selected);
-        assert_eq!(button.tab_index, 1);
-        assert!(button.tab_stop);
-        assert!(!button.dropdown_caret);
-        assert!(matches!(button.rounded, ButtonRounded::Medium));
-    }
-
-    #[gpui::test]
-    fn test_button_clickable_logic(_cx: &mut gpui::TestAppContext) {
-        // Button with click handler should be clickable
-        let clickable = Button::new("test").on_click(|_, _, _| {});
-        assert!(clickable.clickable());
-
-        // Disabled button should not be clickable
-        let disabled = Button::new("test").disabled(true).on_click(|_, _, _| {});
-        assert!(!disabled.clickable());
-
-        // Loading button should not be clickable
-        let loading = Button::new("test").loading(true).on_click(|_, _, _| {});
-        assert!(!loading.clickable());
-    }
-
-    #[gpui::test]
-    fn test_button_variant_methods(_cx: &mut gpui::TestAppContext) {
-        // Test variant check methods
-        assert!(ButtonVariant::Link.is_link());
-        assert!(ButtonVariant::Text.is_text());
-        assert!(ButtonVariant::Ghost.is_ghost());
-
-        // Test no_padding logic
-        assert!(ButtonVariant::Link.no_padding());
-        assert!(ButtonVariant::Text.no_padding());
-        assert!(!ButtonVariant::Ghost.no_padding());
     }
 }

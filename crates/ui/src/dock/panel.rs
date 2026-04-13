@@ -67,7 +67,7 @@ pub trait Panel: EventEmitter<PanelEvent> + Render + Focusable {
 
     /// The title of the panel
     fn title(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        t!("Dock.Unnamed")
+        SharedString::from(t!("Dock.Unnamed"))
     }
 
     /// The theme of the panel title, default is `None`.
@@ -313,9 +313,7 @@ impl PanelRegistry {
     }
 
     pub fn new() -> Self {
-        Self {
-            items: HashMap::new(),
-        }
+        Self { items: HashMap::new() }
     }
 
     pub fn global(cx: &App) -> &Self {

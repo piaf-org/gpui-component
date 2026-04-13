@@ -66,7 +66,6 @@ let state = cx.new(|cx|
         .code_editor("rust") // Language for syntax highlighting
         .line_number(true) // Show line numbers
         .searchable(true) // Enable search functionality
-        .show_whitespaces(true) // Show whitespace characters
         .default_value("fn main() {\n    println!(\"Hello, world!\");\n}")
 );
 
@@ -232,7 +231,7 @@ div()
     .bg(cx.theme().background)
     .border_2()
     .border_color(cx.theme().input)
-    .rounded(cx.theme().radius_lg)
+    .rounded_lg()
     .p_4()
     .child(
         Input::new(&state)

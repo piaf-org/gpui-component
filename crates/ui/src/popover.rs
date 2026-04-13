@@ -1,15 +1,12 @@
 use gpui::{
-    AnyElement, App, Bounds, Context, Deferred, DismissEvent, Div, ElementId, EventEmitter,
-    FocusHandle, Focusable, Half, InteractiveElement as _, IntoElement, KeyBinding, MouseButton,
-    ParentElement, Pixels, Point, Render, RenderOnce, Stateful, StyleRefinement, Styled,
-    Subscription, Window, deferred, div, prelude::FluentBuilder as _, px,
+    AnyElement, App, Bounds, Context, Corner, DismissEvent, ElementId, EventEmitter, FocusHandle,
+    Focusable, InteractiveElement as _, IntoElement, KeyBinding, MouseButton, ParentElement,
+    Pixels, Point, Render, RenderOnce, StyleRefinement, Styled, Subscription, Window, anchored,
+    canvas, deferred, div, prelude::FluentBuilder as _, px,
 };
-use std::{cell::Cell, rc::Rc};
+use std::rc::Rc;
 
-use crate::{
-    Anchor, ElementExt, Selectable, StyledExt as _, actions::Cancel, anchored,
-    global_state::GlobalState, v_flex,
-};
+use crate::{Selectable, StyledExt as _, actions::Cancel, v_flex};
 
 const CONTEXT: &str = "Popover";
 pub(crate) fn init(cx: &mut App) {
@@ -21,7 +18,7 @@ pub(crate) fn init(cx: &mut App) {
 pub struct Popover {
     id: ElementId,
     style: StyleRefinement,
-    anchor: Anchor,
+    anchor: Corner,
     default_open: bool,
     open: Option<bool>,
     tracked_focus_handle: Option<FocusHandle>,
@@ -48,7 +45,7 @@ impl Popover {
         Self {
             id: id.into(),
             style: StyleRefinement::default(),
-            anchor: Anchor::TopLeft,
+            anchor: Corner::TopLeft,
             trigger: None,
             trigger_style: None,
             content: None,
@@ -64,11 +61,8 @@ impl Popover {
     }
 
     /// Set the anchor corner of the popover, default is `Corner::TopLeft`.
-    ///
-    /// This method is kept for backward compatibility with `Corner` type.
-    /// Internally, it converts `Corner` to `Anchor`.
-    pub fn anchor(mut self, anchor: impl Into<Anchor>) -> Self {
-        self.anchor = anchor.into();
+    pub fn anchor(mut self, anchor: Corner) -> Self {
+        self.anchor = anchor;
         self
     }
 
@@ -144,9 +138,8 @@ impl Popover {
         E: IntoElement,
         F: Fn(&mut PopoverState, &mut Window, &mut Context<PopoverState>) -> E + 'static,
     {
-        self.content = Some(Rc::new(move |state, window, cx| {
-            content(state, window, cx).into_any_element()
-        }));
+        self.content =
+            Some(Rc::new(move |state, window, cx| content(state, window, cx).into_any_element()));
         self
     }
 
@@ -170,19 +163,16 @@ impl Popover {
         self
     }
 
-    pub(crate) fn resolved_corner(anchor: Anchor, trigger_bounds: Bounds<Pixels>) -> Point<Pixels> {
-        let offset = if anchor.is_center() {
-            gpui::point(trigger_bounds.size.width.half(), px(0.))
-        } else {
-            Point::default()
-        };
-
-        trigger_bounds.corner(anchor.swap_vertical().into())
-            + offset
-            + Point {
-                x: px(0.),
-                y: -trigger_bounds.size.height,
-            }
+    fn resolved_corner(anchor: Corner, bounds: Bounds<Pixels>) -> Point<Pixels> {
+        bounds.corner(match anchor {
+            Corner::TopLeft => Corner::BottomLeft,
+            Corner::TopRight => Corner::BottomRight,
+            Corner::BottomLeft => Corner::TopLeft,
+            Corner::BottomRight => Corner::TopRight,
+        }) + Point {
+            x: px(0.),
+            y: -bounds.size.height,
+        }
     }
 }
 
@@ -201,8 +191,7 @@ impl Styled for Popover {
 pub struct PopoverState {
     focus_handle: FocusHandle,
     pub(crate) tracked_focus_handle: Option<FocusHandle>,
-    previous_focus_handle: Option<FocusHandle>,
-    trigger_bounds: Bounds<Pixels>,
+    trigger_bounds: Option<Bounds<Pixels>>,
     open: bool,
     on_open_change: Option<Rc<dyn Fn(&bool, &mut Window, &mut App)>>,
 
@@ -214,8 +203,7 @@ impl PopoverState {
         Self {
             focus_handle: cx.focus_handle(),
             tracked_focus_handle: None,
-            previous_focus_handle: None,
-            trigger_bounds: Bounds::default(),
+            trigger_bounds: None,
             open: default_open,
             on_open_change: None,
             _dismiss_subscription: None,
@@ -241,22 +229,8 @@ impl PopoverState {
         }
     }
 
-    fn set_open(&mut self, open: bool, cx: &mut Context<Self>) {
-        self.open = open;
-        if self.open {
-            GlobalState::global_mut(cx).register_deferred_popover(&self.focus_handle);
-        } else {
-            GlobalState::global_mut(cx).unregister_deferred_popover(&self.focus_handle);
-        }
-    }
-
     fn toggle_open(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let opening = !self.open;
-        if opening {
-            // Save the focused element before opening, so we can restore it on close.
-            self.previous_focus_handle = window.focused(cx);
-        }
-        self.set_open(opening, cx);
+        self.open = !self.open;
         if self.open {
             let state = cx.entity();
             let focus_handle = if let Some(tracked_focus_handle) = self.tracked_focus_handle.clone()
@@ -268,22 +242,14 @@ impl PopoverState {
             focus_handle.focus(window, cx);
 
             self._dismiss_subscription =
-                Some(
-                    window.subscribe(&cx.entity(), cx, move |_, _: &DismissEvent, window, cx| {
-                        state.update(cx, |state, cx| {
-                            state.dismiss(window, cx);
-                        });
-                        window.refresh();
-                    }),
-                );
+                Some(window.subscribe(&cx.entity(), cx, move |_, _: &DismissEvent, window, cx| {
+                    state.update(cx, |state, cx| {
+                        state.dismiss(window, cx);
+                    });
+                    window.refresh();
+                }));
         } else {
             self._dismiss_subscription = None;
-            // Restore focus to the element that was focused before the popover opened.
-            if let Some(prev) = self.previous_focus_handle.take() {
-                if self.focus_handle.contains_focused(window, cx) {
-                    prev.focus(window, cx);
-                }
-            }
         }
 
         if let Some(callback) = self.on_open_change.as_ref() {
@@ -311,61 +277,21 @@ impl Render for PopoverState {
 
 impl EventEmitter<DismissEvent> for PopoverState {}
 
-impl Popover {
-    pub(crate) fn render_popover<E>(
-        anchor: Anchor,
-        position: Rc<Cell<Point<Pixels>>>,
-        content: E,
-        _: &mut Window,
-        _: &mut App,
-    ) -> Deferred
-    where
-        E: IntoElement + 'static,
-    {
-        deferred(
-            anchored()
-                .snap_to_window_with_margin(px(8.))
-                .anchor(anchor)
-                .position_fn(move || position.get())
-                .child(div().relative().child(content)),
-        )
-        .with_priority(1)
-    }
-
-    pub(crate) fn render_popover_content(
-        anchor: Anchor,
-        appearance: bool,
-        _: &mut Window,
-        cx: &mut App,
-    ) -> Stateful<Div> {
-        v_flex()
-            .id("content")
-            .occlude()
-            .tab_group()
-            .when(appearance, |this| this.popover_style(cx).p_3())
-            .map(|this| match anchor {
-                Anchor::TopLeft | Anchor::TopCenter | Anchor::TopRight => this.top_1(),
-                Anchor::BottomLeft | Anchor::BottomCenter | Anchor::BottomRight => this.bottom_1(),
-            })
-    }
-}
-
 impl RenderOnce for Popover {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let force_open = self.open;
         let default_open = self.default_open;
         let tracked_focus_handle = self.tracked_focus_handle.clone();
-        let state = window.use_keyed_state(self.id.clone(), cx, |_, cx| {
-            PopoverState::new(default_open, cx)
-        });
+        let state = window
+            .use_keyed_state(self.id.clone(), cx, |_, cx| PopoverState::new(default_open, cx));
 
-        state.update(cx, |state, cx| {
+        state.update(cx, |state, _| {
             if let Some(tracked_focus_handle) = tracked_focus_handle {
                 state.tracked_focus_handle = Some(tracked_focus_handle);
             }
             state.on_open_change = self.on_open_change.clone();
             if let Some(force_open) = force_open {
-                state.set_open(force_open, cx);
+                state.open = force_open;
             }
         });
 
@@ -379,134 +305,84 @@ impl RenderOnce for Popover {
 
         let parent_view_id = window.current_view();
 
-        // Shared cell so the deferred Anchored element can read the real trigger bounds at
-        // prepaint time (after trigger's on_prepaint has already fired with the correct bounds).
-        let position = Rc::new(Cell::new(Self::resolved_corner(self.anchor, trigger_bounds)));
-
         let el = div()
             .id(self.id)
             .child((trigger)(open, window, cx))
             .on_mouse_down(self.mouse_button, {
                 let state = state.clone();
                 move |_, window, cx| {
-                    cx.stop_propagation();
                     state.update(cx, |state, cx| {
                         // We force set open to false to toggle it correctly.
                         // Because if the mouse down out will toggle open first.
-                        state.set_open(open, cx);
+                        state.open = open;
                         state.toggle_open(window, cx);
                     });
                     cx.notify(parent_view_id);
                 }
             })
-            .on_prepaint({
-                let state = state.clone();
-                let position = position.clone();
-                let anchor = self.anchor;
-                move |bounds, _, cx| {
-                    // Update the shared cell so the deferred Anchored element reads the correct
-                    // position when its prepaint runs (deferred prepaint happens after this).
-                    position.set(Self::resolved_corner(anchor, bounds));
-                    state.update(cx, |state, _| {
-                        state.trigger_bounds = bounds;
-                    });
-                }
-            });
+            .child(
+                canvas(
+                    {
+                        let state = state.clone();
+                        move |bounds, _, cx| {
+                            state.update(cx, |state, _| {
+                                state.trigger_bounds = Some(bounds);
+                            })
+                        }
+                    },
+                    |_, _, _, _| {},
+                )
+                .absolute()
+                .size_full(),
+            );
 
         if !open {
             return el;
         }
 
-        let popover_content =
-            Self::render_popover_content(self.anchor, self.appearance, window, cx)
-                .track_focus(&focus_handle)
-                .key_context(CONTEXT)
-                .on_action(window.listener_for(&state, PopoverState::on_action_cancel))
-                .when_some(self.content, |this, content| {
-                    this.child(state.update(cx, |state, cx| (content)(state, window, cx)))
-                })
-                .children(self.children)
-                .when(self.overlay_closable, |this| {
-                    this.on_mouse_down_out({
-                        let state = state.clone();
-                        move |_, window, cx| {
-                            state.update(cx, |state, cx| {
-                                state.dismiss(window, cx);
-                            });
-                            cx.notify(parent_view_id);
-                        }
+        el.child(
+            deferred(
+                anchored()
+                    .snap_to_window_with_margin(px(8.))
+                    .anchor(self.anchor)
+                    .when_some(trigger_bounds, |this, trigger_bounds| {
+                        this.position(Self::resolved_corner(self.anchor, trigger_bounds))
                     })
-                })
-                .refine_style(&self.style);
-
-        el.child(Self::render_popover(
-            self.anchor,
-            position,
-            popover_content,
-            window,
-            cx,
-        ))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use gpui::MouseButton;
-
-    #[test]
-    fn test_popover_builder_chaining() {
-        let popover = Popover::new("test")
-            .anchor(Anchor::BottomCenter)
-            .mouse_button(MouseButton::Right)
-            .default_open(true)
-            .appearance(false)
-            .overlay_closable(false);
-
-        assert_eq!(popover.anchor, Anchor::BottomCenter);
-        assert_eq!(popover.mouse_button, MouseButton::Right);
-        assert!(popover.default_open);
-        assert!(!popover.appearance);
-        assert!(!popover.overlay_closable);
-    }
-
-    #[test]
-    fn test_resolved_corner_top_positions() {
-        use gpui::px;
-
-        let bounds = Bounds {
-            origin: Point {
-                x: px(100.),
-                y: px(100.),
-            },
-            size: gpui::Size {
-                width: px(200.),
-                height: px(50.),
-            },
-        };
-
-        let pos = Popover::resolved_corner(Anchor::TopLeft, bounds);
-        assert_eq!(pos.x, px(100.));
-        assert_eq!(pos.y, px(100.));
-
-        let pos = Popover::resolved_corner(Anchor::TopCenter, bounds);
-        assert_eq!(pos.x, px(200.));
-        assert_eq!(pos.y, px(100.));
-
-        let pos = Popover::resolved_corner(Anchor::TopRight, bounds);
-        assert_eq!(pos.x, px(300.));
-        assert_eq!(pos.y, px(100.));
-
-        let pos = Popover::resolved_corner(Anchor::BottomLeft, bounds);
-        assert_eq!(pos.x, px(100.));
-        assert_eq!(pos.y, px(50.));
-
-        let pos = Popover::resolved_corner(Anchor::BottomCenter, bounds);
-        assert_eq!(pos.x, px(200.));
-        assert_eq!(pos.y, px(50.));
-
-        let pos = Popover::resolved_corner(Anchor::BottomRight, bounds);
-        assert_eq!(pos.x, px(300.));
-        assert_eq!(pos.y, px(50.));
+                    .child(
+                        v_flex()
+                            .id("content")
+                            .track_focus(&focus_handle)
+                            .key_context(CONTEXT)
+                            .on_action(window.listener_for(&state, PopoverState::on_action_cancel))
+                            .size_full()
+                            .occlude()
+                            .tab_group()
+                            .when(self.appearance, |this| this.popover_style(cx).p_3())
+                            .map(|this| match self.anchor {
+                                Corner::TopLeft | Corner::TopRight => this.top_1(),
+                                Corner::BottomLeft | Corner::BottomRight => this.bottom_1(),
+                            })
+                            .when_some(self.content, |this, content| {
+                                this.child(
+                                    state.update(cx, |state, cx| (content)(state, window, cx)),
+                                )
+                            })
+                            .children(self.children)
+                            .when(self.overlay_closable, |this| {
+                                this.on_mouse_down_out({
+                                    let state = state.clone();
+                                    move |_, window, cx| {
+                                        state.update(cx, |state, cx| {
+                                            state.dismiss(window, cx);
+                                        });
+                                        cx.notify(parent_view_id);
+                                    }
+                                })
+                            })
+                            .refine_style(&self.style),
+                    ),
+            )
+            .with_priority(1),
+        )
     }
 }

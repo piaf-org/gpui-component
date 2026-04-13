@@ -21,7 +21,9 @@ impl Render for Example {
 }
 
 fn main() {
-    gpui_platform::application().run(move |cx| {
+    let app = Application::new();
+
+    app.run(move |cx| {
         // This must be called before using any GPUI Component features.
         gpui_component::init(cx);
 
@@ -29,12 +31,10 @@ fn main() {
             cx.open_window(WindowOptions::default(), |window, cx| {
                 let view = cx.new(|_| Example);
                 // This first level on the window, should be a Root.
-                cx.new(|cx| {
-                    // You can refine the root view style by yourself.
-                    Root::new(view, window, cx).bg(cx.theme().background)
-                })
-            })
-            .expect("Failed to open window");
+                cx.new(|cx| Root::new(view, window, cx))
+            })?;
+
+            Ok::<_, anyhow::Error>(())
         })
         .detach();
     });

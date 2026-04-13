@@ -5,12 +5,12 @@ use std::{ops::Range, rc::Rc};
 use gpui::{
     App, AppContext as _, Context, Empty, Entity, FocusHandle, Focusable, Half,
     InteractiveElement as _, IntoElement, KeyBinding, ParentElement as _, Pixels, Render, Styled,
-    Subscription, Window, actions, div, prelude::FluentBuilder as _,
+    Subscription, Window, actions, canvas, div, prelude::FluentBuilder as _,
 };
 use ropey::Rope;
 
 use crate::{
-    ActiveTheme, Disableable, ElementExt, IconName, Selectable, Sizable,
+    ActiveTheme, Disableable, IconName, Selectable, Sizable,
     actions::SelectUp,
     button::{Button, ButtonVariants},
     h_flex,
@@ -27,11 +27,7 @@ const CONTEXT: &'static str = "SearchPanel";
 actions!(input, [Tab]);
 
 pub(super) fn init(cx: &mut App) {
-    cx.bind_keys(vec![KeyBinding::new(
-        "shift-enter",
-        SelectUp,
-        Some(CONTEXT),
-    )]);
+    cx.bind_keys(vec![KeyBinding::new("shift-enter", SelectUp, Some(CONTEXT))]);
 }
 
 #[derive(Debug, Clone)]
@@ -231,8 +227,8 @@ impl SearchPanel {
                         match ev {
                             InputEvent::Change => {
                                 this.update_search_query(cx);
-                            }
-                            _ => {}
+                            },
+                            _ => {},
                         }
                     }),
                 ];
@@ -258,11 +254,8 @@ impl SearchPanel {
         cx: &mut Context<Self>,
     ) {
         self.open = true;
-        self.search_input
-            .read(cx)
-            .focus_handle
-            .clone()
-            .focus(window, cx);
+        let focus_handle = self.search_input.read(cx).focus_handle.clone();
+        focus_handle.focus(window, cx);
 
         self.search_input.update(cx, |this, cx| {
             if selected_text.len() > 0 {
@@ -294,7 +287,8 @@ impl SearchPanel {
 
     pub(super) fn hide(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.open = false;
-        self.editor.read(cx).focus_handle.clone().focus(window, cx);
+        let focus_handle = self.editor.read(cx).focus_handle.clone();
+        focus_handle.focus(window, cx);
         cx.notify();
     }
 
@@ -438,7 +432,6 @@ impl Render for SearchPanel {
                     .gap_2()
                     .child(
                         div()
-                            .flex()
                             .flex_1()
                             .gap_1()
                             .child(
@@ -461,12 +454,21 @@ impl Render for SearchPanel {
                                     .w_full()
                                     .shadow_none(),
                             )
-                            .on_prepaint({
-                                let view = cx.entity();
-                                move |bounds, _, cx| {
-                                    view.update(cx, |r, _| r.input_width = bounds.size.width)
-                                }
-                            }),
+                            .child(
+                                canvas(
+                                    {
+                                        let view = cx.entity();
+                                        move |bounds, _, cx| {
+                                            view.update(cx, |r, _| {
+                                                r.input_width = bounds.size.width
+                                            })
+                                        }
+                                    },
+                                    |_, _, _, _| {},
+                                )
+                                .absolute()
+                                .size_full(),
+                            ),
                     )
                     .child(
                         Button::new("replace-mode")
@@ -476,19 +478,12 @@ impl Render for SearchPanel {
                             .selected(self.replace_mode)
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.replace_mode = !this.replace_mode;
-                                if this.replace_mode {
-                                    this.replace_input
-                                        .read(cx)
-                                        .focus_handle
-                                        .clone()
-                                        .focus(window, cx);
+                                let focus_handle = if this.replace_mode {
+                                    this.replace_input.read(cx).focus_handle.clone()
                                 } else {
-                                    this.search_input
-                                        .read(cx)
-                                        .focus_handle
-                                        .clone()
-                                        .focus(window, cx);
-                                }
+                                    this.search_input.read(cx).focus_handle.clone()
+                                };
+                                focus_handle.focus(window, cx);
                                 cx.notify();
                             })),
                     )
@@ -514,9 +509,7 @@ impl Render for SearchPanel {
                     )
                     .child(
                         Label::new(self.matcher.label())
-                            .when(!has_matches, |this| {
-                                this.text_color(cx.theme().muted_foreground)
-                            })
+                            .when(!has_matches, |this| this.text_color(cx.theme().muted_foreground))
                             .text_left()
                             .min_w_16(),
                     )

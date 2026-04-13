@@ -24,13 +24,9 @@ Button::new("ok")
 
 Add the following to your `Cargo.toml`:
 
-GPUI and GPUI Component are under active development, recently GPUI have some new features not published on crates.io, so we recommend using the git version for now.
-
-The documentation on this site are based on the **Git main branch**, if you use the crates.io version, there may be some differences.
-
-```toml
-gpui = { git = "https://github.com/zed-industries/zed" }
-gpui-component = { git = "https://github.com/longbridge/gpui-component" }
+```toml-vue
+gpui = "{{ GPUI_VERSION }}"
+gpui-component = "{{ VERSION }}"
 ```
 
 ## Hello World
@@ -61,7 +57,9 @@ impl Render for HelloWorld {
 }
 
 fn main() {
-    gpui_platform::application().run(move |cx| {
+    let app = Application::new();
+
+    app.run(move |cx| {
         // This must be called before using any GPUI Component features.
         gpui_component::init(cx);
 
@@ -70,8 +68,9 @@ fn main() {
                 let view = cx.new(|_| HelloWorld);
                 // This first level on the window, should be a Root.
                 cx.new(|cx| Root::new(view, window, cx))
-            })
-            .expect("Failed to open window");
+            })?;
+
+            Ok::<_, anyhow::Error>(())
         })
         .detach();
     });

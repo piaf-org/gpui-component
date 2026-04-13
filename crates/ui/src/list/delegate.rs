@@ -22,16 +22,11 @@ pub trait ListDelegate: Sized + 'static {
     }
 
     /// Return the number of sections in the list, default is 1.
-    ///
-    /// Min value is 1.
     fn sections_count(&self, cx: &App) -> usize {
         1
     }
 
     /// Return the number of items in the section at the given index.
-    ///
-    /// NOTE: Only the sections with items_count > 0 will be rendered. If the section has 0 items,
-    /// the section header and footer will also be skipped.
     fn items_count(&self, section: usize, cx: &App) -> usize;
 
     /// Render the item at the given index.
@@ -123,15 +118,6 @@ pub trait ListDelegate: Sized + 'static {
         cx: &mut Context<ListState<Self>>,
     );
 
-    /// Set the index of the item that has been right clicked.
-    fn set_right_clicked_index(
-        &mut self,
-        ix: Option<IndexPath>,
-        window: &mut Window,
-        cx: &mut Context<ListState<Self>>,
-    ) {
-    }
-
     /// Set the confirm and give the selected index,
     /// this is means user have clicked the item or pressed Enter.
     ///
@@ -144,9 +130,9 @@ pub trait ListDelegate: Sized + 'static {
 
     /// Return true to enable load more data when scrolling to the bottom.
     ///
-    /// Default: false
-    fn has_more(&self, cx: &App) -> bool {
-        false
+    /// Default: true
+    fn is_eof(&self, cx: &App) -> bool {
+        true
     }
 
     /// Returns a threshold value (n entities), of course,

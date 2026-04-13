@@ -138,37 +138,6 @@ Dock:
     zh-CN: 展开
     zh-HK: 展開
     it: Espandi
-ColorPicker:
-  Palette:
-    en: Palette
-    zh-CN: 调色板
-    zh-HK: 調色板
-    it: Tavolozza
-  HSLA:
-    en: HSLA
-    zh-CN: HSLA
-    zh-HK: HSLA
-    it: HSLA
-  Hue:
-    en: Hue
-    zh-CN: 色相
-    zh-HK: 色相
-    it: Tonalità
-  Saturation:
-    en: Saturation
-    zh-CN: 饱和度
-    zh-HK: 飽和度
-    it: Saturazione
-  Lightness:
-    en: Lightness
-    zh-CN: 亮度
-    zh-HK: 亮度
-    it: Luminosità
-  Alpha:
-    en: Alpha
-    zh-CN: 透明度
-    zh-HK: 透明度
-    it: Alfa
 Dialog:
   ok:
     en: OK
@@ -230,12 +199,3 @@ Settings:
     zh-CN: 重置全部
     zh-HK: 重置全部
     it: Resetta Tutto
-Pagination:
-  previous:
-    en: Previous
-    zh-CN: 上一页
-    zh-HK: 上一頁
-  next:
-    en: Next
-    zh-CN: 下一页
-    zh-HK: 下一頁

@@ -4,7 +4,7 @@ use gpui_component::{
     highlighter::Language,
     input::{Input, InputState, TabSize},
     resizable::h_resizable,
-    text::html,
+    text::TextView,
 };
 use gpui_component_assets::Assets;
 
@@ -47,7 +47,7 @@ impl Example {
 }
 
 impl Render for Example {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         h_resizable("container")
             .child(
                 div()
@@ -64,17 +64,22 @@ impl Render for Example {
                     .into_any(),
             )
             .child(
-                html(self.input_state.read(cx).value().clone())
-                    .p_5()
-                    .scrollable(true)
-                    .selectable(true)
-                    .into_any(),
+                TextView::html(
+                    "preview",
+                    self.input_state.read(cx).value().clone(),
+                    window,
+                    cx,
+                )
+                .p_5()
+                .scrollable(true)
+                .selectable(true)
+                .into_any(),
             )
     }
 }
 
 fn main() {
-    let app = gpui_platform::application().with_assets(Assets);
+    let app = Application::new().with_assets(Assets);
 
     app.run(move |cx| {
         gpui_component_story::init(cx);

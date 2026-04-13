@@ -246,13 +246,13 @@ where
                 }
 
                 Ok(())
-            }
+            },
 
             NodeData::Comment { contents } if self.preserve_comments => {
                 self.w.write_all(b"<!--")?;
                 self.w.write_all(contents.as_bytes())?;
                 self.w.write_all(b"-->")
-            }
+            },
 
             NodeData::Document => self.minify_children(ctx, node),
 
@@ -278,7 +278,7 @@ where
                 }
 
                 Ok(())
-            }
+            },
 
             _ => Ok(()),
         }
@@ -297,7 +297,7 @@ where
                     } else {
                         Some(false)
                     }
-                }
+                },
                 NodeData::Comment { .. } => Some(self.preserve_comments),
                 _ => Some(false),
             })
@@ -337,7 +337,7 @@ where
                     empty_attributes && omit_end && !self.next_is_comment(&*node.children.borrow());
 
                 (omit_start, omit_end)
-            }
+            },
             "head" => {
                 // The end tag may be omitted if the first thing following the <head> element is not a space character or a comment.
                 let omit_end = ctx.right.map_or(true, |right| {
@@ -351,7 +351,7 @@ where
                                 } else {
                                     None
                                 }
-                            }
+                            },
                             _ => Some(true),
                         })
                         .unwrap_or(true)
@@ -372,13 +372,13 @@ where
                                 } else {
                                     None
                                 }
-                            }
+                            },
                             _ => Some(false),
                         })
                         .unwrap_or(true);
 
                 (omit_start, omit_end)
-            }
+            },
             "body" => {
                 // The start tag may be omitted if the first thing inside it is not a space character, comment, <script> element or <style> element.
                 let omit_start = empty_attributes
@@ -390,14 +390,14 @@ where
                             NodeData::Text { contents } => self.is_whitespace(contents),
                             NodeData::Element { name, .. } => {
                                 Some(!matches!(name.local.as_ref(), "script" | "style"))
-                            }
+                            },
                             NodeData::Comment { .. } => {
                                 if self.preserve_comments {
                                     Some(false)
                                 } else {
                                     None
                                 }
-                            }
+                            },
                             _ => Some(true),
                         })
                         .unwrap_or(true);
@@ -405,7 +405,7 @@ where
                 let omit_end = ctx.right.map_or(true, |right| !self.next_is_comment(right));
 
                 (omit_start && omit_end, omit_end)
-            }
+            },
             "p" => {
                 let omit_end = ctx.next_element().map_or(true, |node| {
                     if let NodeData::Element { name, .. } = &node.data {
@@ -443,7 +443,7 @@ where
                 });
 
                 (false, omit_end)
-            }
+            },
             // TODO: comprehensive handling of optional end element rules
             _ => (false, optional_end_tag(name)),
         })
@@ -803,12 +803,7 @@ mod tests {
             // Comments preserved
             ("<html>     <!-- -->    ", "<html><!-- -->", true, true),
             ("<html><!-- --></html>", "<html><!-- -->", true, true),
-            (
-                "<html><!-- --></html><!-- -->",
-                "<html><!-- --></html><!-- -->",
-                true,
-                true,
-            ),
+            ("<html><!-- --></html><!-- -->", "<html><!-- --></html><!-- -->", true, true),
             (
                 "<html>    <!-- -->    </html>    <!-- -->    ",
                 "<html><!-- --></html><!-- -->",
@@ -858,23 +853,13 @@ mod tests {
             ("<body>    <p>A", "<p>A", true, false),
             ("<body id=main>    <p>A", "<body id=main><p>A", true, false),
             // Retain whitespace, whitespace before <p>
-            (
-                "    <body>    <p>A      ",
-                "<body>    <p>A      ",
-                false,
-                false,
-            ),
+            ("    <body>    <p>A      ", "<body>    <p>A      ", false, false),
             // Retain whitespace, touching <p>
             ("<body><p>A</body>", "<p>A", false, false),
             // Comments ignored
             ("<body><p>A</body><!-- -->", "<p>A", false, false),
             // Comments preserved
-            (
-                "<body><p>A</body><!-- -->",
-                "<body><p>A</body><!-- -->",
-                false,
-                true,
-            ),
+            ("<body><p>A</body><!-- -->", "<body><p>A</body><!-- -->", false, true),
             // Retain end tag if touching inline element
             (
                 "<p>Some text</p><button></button>",

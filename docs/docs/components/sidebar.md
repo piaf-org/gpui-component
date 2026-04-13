@@ -23,7 +23,7 @@ use gpui_component::sidebar::{
 ```rust
 use gpui_component::{sidebar::*, Side};
 
-Sidebar::new()
+Sidebar::new(Side::Left)
     .header(
         SidebarHeader::new()
             .child("My Application")
@@ -55,7 +55,7 @@ Sidebar::new()
 ```rust
 let mut collapsed = false;
 
-Sidebar::new()
+Sidebar::new(Side::Left)
     .collapsed(collapsed)
     .collapsible(true)
     .header(
@@ -78,7 +78,7 @@ Sidebar::new()
     )
 
 // Toggle button
-SidebarToggleButton::new()
+SidebarToggleButton::left()
     .collapsed(collapsed)
     .on_click(|_, _, _| {
         collapsed = !collapsed;
@@ -109,7 +109,7 @@ SidebarMenuItem::new("Projects")
 ### Multiple Groups
 
 ```rust
-Sidebar::new()
+Sidebar::new(Side::Left)
     .child(
         SidebarGroup::new("Main")
             .child(
@@ -166,8 +166,7 @@ SidebarMenuItem::new("Settings")
 ### Right-Side Placement
 
 ```rust
-Sidebar::new()
-    .side(Side::Right)
+Sidebar::new(Side::Right)
     .width(300)
     .header(
         SidebarHeader::new()
@@ -183,58 +182,10 @@ Sidebar::new()
     )
 ```
 
-### Context Menus
-
-Add right-click context menus to sidebar menu items for additional actions:
-
-```rust
-use gpui_component::menu::PopupMenu;
-
-SidebarMenuItem::new("Project Files")
-    .icon(IconName::Folder)
-    .context_menu(|menu, _, _| {
-        menu.link("Open in Editor", "https://editor.example.com")
-            .separator()
-            .menu_with_description("Rename", "Rename this project", Box::new(RenameAction))
-            .menu_with_description("Delete", "Delete this project", Box::new(DeleteAction))
-            .separator()
-            .submenu("Share", |submenu| {
-                submenu.menu("Copy Link", Box::new(CopyLinkAction))
-                       .menu("Send via Email", Box::new(EmailAction))
-            })
-    })
-
-// Multiple items with context menus
-SidebarMenu::new()
-    .child(
-        SidebarMenuItem::new("Documentation")
-            .icon(IconName::BookOpen)
-            .context_menu(|menu, _, _| {
-                menu.menu("View Online", Box::new(ViewOnlineAction))
-                    .menu("Download PDF", Box::new(DownloadPdfAction))
-            })
-    )
-    .child(
-        SidebarMenuItem::new("Settings")
-            .icon(IconName::Settings)
-            .children([
-                SidebarMenuItem::new("General")
-                    .context_menu(|menu, _, _| {
-                        menu.menu("Reset to Defaults", Box::new(ResetAction))
-                    }),
-                SidebarMenuItem::new("Advanced")
-                    .context_menu(|menu, _, _| {
-                        menu.menu("Export Settings", Box::new(ExportAction))
-                            .menu("Import Settings", Box::new(ImportAction))
-                    })
-            ])
-    )
-```
-
 ### Custom Width and Styling
 
 ```rust
-Sidebar::new()
+Sidebar::new(Side::Left)
     .width(280)  // Custom width in pixels
     .border_width(2)  // Custom border width
     .header(
@@ -293,7 +244,7 @@ SidebarFooter::new()
 ```rust
 let is_mobile = window_width < 768;
 
-Sidebar::new()
+Sidebar::new(Side::Left)
     .collapsed(is_mobile || manually_collapsed)
     .width(if is_mobile { 60 } else { 240 })
     .header(
@@ -326,7 +277,7 @@ cx.theme().sidebar_primary_foreground // Primary text
 ### File Explorer Sidebar
 
 ```rust
-Sidebar::new()
+Sidebar::new(Side::Left)
     .header(
         SidebarHeader::new()
             .child(
@@ -369,7 +320,7 @@ Sidebar::new()
 ### Admin Dashboard Sidebar
 
 ```rust
-Sidebar::new()
+Sidebar::new(Side::Left)
     .header(
         SidebarHeader::new()
             .child(
@@ -436,7 +387,7 @@ Sidebar::new()
 ### Settings Sidebar
 
 ```rust
-Sidebar::new()
+Sidebar::new(Side::Left)
     .width(300)
     .header(
         SidebarHeader::new()

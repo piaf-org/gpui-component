@@ -41,17 +41,17 @@ impl AxisText {
 pub struct PlotAxis {
     x: Option<Pixels>,
     x_label: PlotLabel,
-    x_axis: bool,
+    show_x_axis: bool,
     y: Option<Pixels>,
     y_label: PlotLabel,
-    y_axis: bool,
+    show_y_axis: bool,
     stroke: Hsla,
 }
 
 impl PlotAxis {
     pub fn new() -> Self {
         Self {
-            x_axis: true,
+            show_x_axis: true,
             ..Default::default()
         }
     }
@@ -62,11 +62,9 @@ impl PlotAxis {
         self
     }
 
-    /// Show or hide the x-axis of the Axis.
-    ///
-    /// Default is true.
-    pub fn x_axis(mut self, x_axis: bool) -> Self {
-        self.x_axis = x_axis;
+    /// Hide the x-axis of the Axis.
+    pub fn hide_x_axis(mut self) -> Self {
+        self.show_x_axis = false;
         self
     }
 
@@ -94,11 +92,9 @@ impl PlotAxis {
         self
     }
 
-    /// Show or hide the y-axis of the Axis.
-    ///
-    /// Default is true.
-    pub fn y_axis(mut self, y_axis: bool) -> Self {
-        self.y_axis = y_axis;
+    /// Hide the y-axis of the Axis.
+    pub fn hide_y_axis(mut self) -> Self {
+        self.show_y_axis = false;
         self
     }
 
@@ -141,7 +137,7 @@ impl PlotAxis {
 
         // X axis
         if let Some(x) = self.x {
-            if self.x_axis {
+            if self.show_x_axis {
                 self.draw_axis(
                     origin_point(px(0.), x, origin),
                     origin_point(bounds.size.width, x, origin),
@@ -153,7 +149,7 @@ impl PlotAxis {
 
         // Y axis
         if let Some(y) = self.y {
-            if self.y_axis {
+            if self.show_y_axis {
                 self.draw_axis(
                     origin_point(y, px(0.), origin),
                     origin_point(y, bounds.size.height, origin),

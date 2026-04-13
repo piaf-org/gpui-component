@@ -160,14 +160,9 @@ if let Some(entry) = tree_state.read(cx).selected_entry() {
     println!("Current selection: {}", entry.item().label);
 }
 
-// Set selection programmatically (by selected_index)
+// Set selection programmatically
 tree_state.update(cx, |state, cx| {
     state.set_selected_index(Some(2), cx); // Select third item
-});
-
-// Set selection programmatically (by tree item)
-tree_state.update(cx, |state, cx| {
-    state.set_selected_item(Some(item), cx); // Select third item
 });
 
 // Scroll to specific item
@@ -175,14 +170,9 @@ tree_state.update(cx, |state, _| {
     state.scroll_to_item(5, gpui::ScrollStrategy::Center);
 });
 
-// Clear selection (by selected_index)
+// Clear selection
 tree_state.update(cx, |state, cx| {
     state.set_selected_index(None, cx);
-});
-
-// Clear selection (by tree item)
-tree_state.update(cx, |state, cx| {
-    state.set_selected_item(None, cx);
 });
 ```
 
@@ -190,17 +180,15 @@ tree_state.update(cx, |state, cx| {
 
 ### TreeState
 
-| Method                         | Description                      |
-|--------------------------------|----------------------------------|
-| `new(cx)`                      | Create a new tree state          |
-| `items(items)`                 | Set initial tree items           |
-| `set_items(items, cx)`         | Update tree items and notify     |
-| `selected_index()`             | Get currently selected index     |
-| `set_selected_index(ix, cx)`   | Set selected index               |
-| `set_selected_item(item, cx)`  | Set selected by tree item        |
-| `selected_item(item, cx)`      | Get currently selected tree item |
-| `selected_entry()`             | Get currently selected entry     |
-| `scroll_to_item(ix, strategy)` | Scroll to specific item          |
+| Method                         | Description                  |
+| ------------------------------ | ---------------------------- |
+| `new(cx)`                      | Create a new tree state      |
+| `items(items)`                 | Set initial tree items       |
+| `set_items(items, cx)`         | Update tree items and notify |
+| `selected_index()`             | Get currently selected index |
+| `set_selected_index(ix, cx)`   | Set selected index           |
+| `selected_entry()`             | Get currently selected entry |
+| `scroll_to_item(ix, strategy)` | Scroll to specific item      |
 
 ### TreeItem
 

@@ -1,9 +1,9 @@
 use gpui::{
-    div, prelude::FluentBuilder as _, px, AnyElement, App, Axis, DefiniteLength, IntoElement,
-    ParentElement, relative, RenderOnce, SharedString, Styled, Window
+    AnyElement, App, Axis, DefiniteLength, IntoElement, ParentElement, RenderOnce, SharedString,
+    Styled, Window, div, prelude::FluentBuilder as _, px,
 };
 
-use crate::{h_flex, text::Text, v_flex, ActiveTheme as _, AxisExt, Sizable, Size};
+use crate::{ActiveTheme as _, AxisExt, Sizable, Size, h_flex, text::Text, v_flex};
 
 /// A description list.
 #[derive(IntoElement)]
@@ -298,7 +298,7 @@ impl RenderOnce for DescriptionList {
                             let is_first_col = item_ix == 0;
 
                             match item {
-                                DescriptionItem::Item { label, value, span } => {
+                                DescriptionItem::Item { label, value, .. } => {
                                     let el = if self.layout.is_vertical() {
                                         v_flex()
                                     } else {
@@ -306,7 +306,6 @@ impl RenderOnce for DescriptionList {
                                     };
 
                                     el.flex_1()
-                                        .flex_basis(relative((span as f32) / (self.columns as f32)))
                                         .overflow_x_hidden()
                                         .child(
                                             div()
@@ -335,7 +334,7 @@ impl RenderOnce for DescriptionList {
                                                 .map(|this| match label_width {
                                                     Some(label_width) => {
                                                         this.w(label_width).flex_shrink_0()
-                                                    }
+                                                    },
                                                     None => this,
                                                 })
                                                 .child(label),
@@ -348,7 +347,7 @@ impl RenderOnce for DescriptionList {
                                                 .overflow_hidden()
                                                 .child(value),
                                         )
-                                }
+                                },
                                 _ => div().h_2().w_full().when(self.bordered, |this| {
                                     this.bg(cx.theme().description_list_label)
                                 }),

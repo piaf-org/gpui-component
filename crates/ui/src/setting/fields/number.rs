@@ -120,8 +120,8 @@ impl SettingFieldRender for NumberField {
                                                 }
                                             }
                                         });
-                                    }
-                                    _ => {}
+                                    },
+                                    _ => {},
                                 }
                             }
                         }),

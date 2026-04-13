@@ -1,8 +1,8 @@
-use crate::{theme::ActiveTheme as _, ColorName, Sizable, Size, StyledExt};
+use crate::{ColorName, Sizable, Size, StyledExt, theme::ActiveTheme as _};
 use gpui::{
-    div, prelude::FluentBuilder as _, relative, rems, transparent_white, AbsoluteLength,
-    AnyElement, App, Hsla, InteractiveElement as _, IntoElement, ParentElement, RenderOnce,
-    StyleRefinement, Styled, Window,
+    AbsoluteLength, AnyElement, App, Hsla, InteractiveElement as _, IntoElement, ParentElement,
+    RenderOnce, StyleRefinement, Styled, Window, div, prelude::FluentBuilder as _, relative, rems,
+    transparent_white,
 };
 
 /// The variant of the Tag.
@@ -38,7 +38,7 @@ impl TagVariant {
                 } else {
                     color.scale(50)
                 }
-            }
+            },
             Self::Custom { color, .. } => *color,
         }
     }
@@ -57,7 +57,7 @@ impl TagVariant {
                 } else {
                     color.scale(200)
                 }
-            }
+            },
             Self::Custom { border, .. } => *border,
         }
     }
@@ -70,49 +70,49 @@ impl TagVariant {
                 } else {
                     cx.theme().primary_foreground
                 }
-            }
+            },
             Self::Secondary => {
                 if outline {
                     cx.theme().muted_foreground
                 } else {
                     cx.theme().secondary_foreground
                 }
-            }
+            },
             Self::Danger => {
                 if outline {
                     cx.theme().danger
                 } else {
                     cx.theme().danger_foreground
                 }
-            }
+            },
             Self::Success => {
                 if outline {
                     cx.theme().success
                 } else {
                     cx.theme().success_foreground
                 }
-            }
+            },
             Self::Warning => {
                 if outline {
                     cx.theme().warning
                 } else {
                     cx.theme().warning_foreground
                 }
-            }
+            },
             Self::Info => {
                 if outline {
                     cx.theme().info
                 } else {
                     cx.theme().info_foreground
                 }
-            }
+            },
             Self::Color(color) => {
                 if cx.theme().is_dark() {
                     color.scale(300)
                 } else {
                     color.scale(600)
                 }
-            }
+            },
             Self::Custom { foreground, .. } => *foreground,
         }
     }

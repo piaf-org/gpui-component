@@ -1,9 +1,9 @@
 use std::rc::Rc;
 
 use gpui::{
-    Action, AnyElement, App, AppContext, Context, DismissEvent, Empty, Entity, EventEmitter,
-    Half as _, InteractiveElement as _, IntoElement, ParentElement, Pixels, Point, Render,
-    RenderOnce, SharedString, Styled, StyledText, Subscription, Window, deferred, div,
+    Action, AnyElement, App, AppContext, Bounds, Context, DismissEvent, Empty, Entity,
+    EventEmitter, InteractiveElement as _, IntoElement, ParentElement, Pixels, Point, Render,
+    RenderOnce, SharedString, Styled, StyledText, Subscription, Window, canvas, deferred, div,
     prelude::FluentBuilder, px, relative,
 };
 use lsp_types::CodeAction;
@@ -87,7 +87,7 @@ impl RenderOnce for MenuItem {
             .p_1()
             .text_xs()
             .line_height(relative(1.))
-            .rounded(cx.theme().radius.half())
+            .rounded_sm()
             .hover(|this| this.bg(cx.theme().accent.opacity(0.8)))
             .when(self.selected, |this| {
                 this.bg(cx.theme().accent)
@@ -146,6 +146,7 @@ pub struct CodeActionMenu {
     state: Entity<InputState>,
     list: Entity<ListState<MenuDelegate>>,
     open: bool,
+    bounds: Bounds<Pixels>,
 
     _subscriptions: Vec<Subscription>,
 }
@@ -175,8 +176,8 @@ impl CodeActionMenu {
                         match ev {
                             ListEvent::Confirm(_) => {
                                 this.hide(cx);
-                            }
-                            _ => {}
+                            },
+                            _ => {},
                         }
                         cx.notify();
                     }),
@@ -187,6 +188,7 @@ impl CodeActionMenu {
                 state,
                 list,
                 open: false,
+                bounds: Bounds::default(),
                 _subscriptions,
             }
         })
@@ -246,15 +248,13 @@ impl CodeActionMenu {
     }
 
     fn on_action_up(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.list.update(cx, |this, cx| {
-            this.on_action_select_prev(&actions::SelectUp, window, cx)
-        });
+        self.list
+            .update(cx, |this, cx| this.on_action_select_prev(&actions::SelectUp, window, cx));
     }
 
     fn on_action_down(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.list.update(cx, |this, cx| {
-            this.on_action_select_next(&actions::SelectDown, window, cx)
-        });
+        self.list
+            .update(cx, |this, cx| this.on_action_select_next(&actions::SelectDown, window, cx));
     }
 
     pub(crate) fn is_open(&self) -> bool {
@@ -314,6 +314,8 @@ impl Render for CodeActionMenu {
             return Empty.into_any_element();
         }
 
+        let view = cx.entity();
+
         let Some(pos) = self.origin(cx) else {
             return Empty.into_any_element();
         };
@@ -328,6 +330,14 @@ impl Render for CodeActionMenu {
                 .max_w(max_width)
                 .min_w(px(120.))
                 .child(List::new(&self.list).max_h(MAX_MENU_HEIGHT))
+                .child(
+                    canvas(
+                        move |bounds, _, cx| view.update(cx, |r, _| r.bounds = bounds),
+                        |_, _, _, _| {},
+                    )
+                    .absolute()
+                    .size_full(),
+                )
                 .on_mouse_down_out(cx.listener(|this, _, _, cx| {
                     this.hide(cx);
                 })),

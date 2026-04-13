@@ -17,7 +17,7 @@ impl NaiveDateExt for chrono::NaiveDate {
                 } else {
                     28
                 }
-            }
+            },
             _ => panic!("Invalid month: {}", month),
         }
     }
@@ -89,26 +89,14 @@ pub(crate) fn days_in_month(year: i32, month: u32) -> Vec<Vec<NaiveDate>> {
 mod tests {
     use chrono::{Datelike, NaiveDate};
 
-    use super::{days_in_month, NaiveDateExt};
+    use super::{NaiveDateExt, days_in_month};
 
     #[test]
     fn test_days_in_month() {
-        assert_eq!(
-            NaiveDate::from_ymd_opt(2024, 2, 1).unwrap().days_in_month(),
-            29
-        );
-        assert_eq!(
-            NaiveDate::from_ymd_opt(2023, 2, 1).unwrap().days_in_month(),
-            28
-        );
-        assert_eq!(
-            NaiveDate::from_ymd_opt(2023, 1, 1).unwrap().days_in_month(),
-            31
-        );
-        assert_eq!(
-            NaiveDate::from_ymd_opt(2023, 4, 1).unwrap().days_in_month(),
-            30
-        );
+        assert_eq!(NaiveDate::from_ymd_opt(2024, 2, 1).unwrap().days_in_month(), 29);
+        assert_eq!(NaiveDate::from_ymd_opt(2023, 2, 1).unwrap().days_in_month(), 28);
+        assert_eq!(NaiveDate::from_ymd_opt(2023, 1, 1).unwrap().days_in_month(), 31);
+        assert_eq!(NaiveDate::from_ymd_opt(2023, 4, 1).unwrap().days_in_month(), 30);
     }
 
     #[test]

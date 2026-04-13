@@ -6,10 +6,11 @@ use std::{
 use gpui::{
     Along, AnyElement, App, AppContext, Axis, Bounds, Context, Element, ElementId, Empty, Entity,
     EventEmitter, InteractiveElement as _, IntoElement, IsZero as _, MouseMoveEvent, MouseUpEvent,
-    ParentElement, Pixels, Render, RenderOnce, Style, Styled, Window, div, prelude::FluentBuilder,
+    ParentElement, Pixels, Render, RenderOnce, Style, Styled, Window, canvas, div,
+    prelude::FluentBuilder,
 };
 
-use crate::{AxisExt, ElementExt, h_flex, resizable::PANEL_MIN_SIZE, v_flex};
+use crate::{AxisExt, h_flex, resizable::PANEL_MIN_SIZE, v_flex};
 
 use super::{ResizableState, resizable_panel, resize_handle};
 
@@ -153,20 +154,27 @@ impl RenderOnce for ResizablePanelGroup {
                         panel
                     }),
             )
-            .on_prepaint({
-                let state = state.clone();
-                move |bounds, _, cx| {
-                    state.update(cx, |state, cx| {
-                        let size_changed =
-                            state.bounds.size.along(self.axis) != bounds.size.along(self.axis);
+            .child({
+                canvas(
+                    {
+                        let state = state.clone();
+                        move |bounds, _, cx| {
+                            state.update(cx, |state, cx| {
+                                let size_changed = state.bounds.size.along(self.axis)
+                                    != bounds.size.along(self.axis);
 
-                        state.bounds = bounds;
+                                state.bounds = bounds;
 
-                        if size_changed {
-                            state.adjust_to_container_size(cx);
+                                if size_changed {
+                                    state.adjust_to_container_size(cx);
+                                }
+                            })
                         }
-                    })
-                }
+                    },
+                    |_, _, _, _| {},
+                )
+                .absolute()
+                .size_full()
             })
             .child(ResizePanelGroupElement {
                 state: state.clone(),
@@ -276,13 +284,20 @@ impl RenderOnce for ResizablePanel {
                 Some(size) => this.flex_basis(size.min(size_range.end).max(size_range.start)),
                 None => this,
             })
-            .on_prepaint({
-                let state = state.clone();
-                move |bounds, _, cx| {
-                    state.update(cx, |state, cx| {
-                        state.update_panel_size(self.panel_ix, bounds, self.size_range, cx)
-                    })
-                }
+            .child({
+                canvas(
+                    {
+                        let state = state.clone();
+                        move |bounds, _, cx| {
+                            state.update(cx, |state, cx| {
+                                state.update_panel_size(self.panel_ix, bounds, self.size_range, cx)
+                            })
+                        }
+                    },
+                    |_, _, _, _| {},
+                )
+                .absolute()
+                .size_full()
             })
             .children(self.children)
             .when(self.panel_ix > 0, |this| {
@@ -376,10 +391,10 @@ impl Element for ResizePanelGroupElement {
                     match axis {
                         Axis::Horizontal => {
                             state.resize_panel(ix, e.position.x - panel.bounds.left(), window, cx)
-                        }
+                        },
                         Axis::Vertical => {
                             state.resize_panel(ix, e.position.y - panel.bounds.top(), window, cx);
-                        }
+                        },
                     }
                     cx.notify();
                 })

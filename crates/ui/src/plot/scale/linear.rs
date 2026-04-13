@@ -3,7 +3,7 @@
 use itertools::Itertools;
 use num_traits::{Num, ToPrimitive};
 
-use super::{sealed::Sealed, Scale};
+use super::{Scale, sealed::Sealed};
 
 #[derive(Clone)]
 pub struct ScaleLinear<T> {
@@ -142,9 +142,6 @@ mod tests {
         let scale = ScaleLinear::new(vec![1., 2., 3.], vec![0., 100.]);
         assert_eq!(scale.least_index_with_domain(0., &[1., 2., 3.]), (0, 0.));
         assert_eq!(scale.least_index_with_domain(50., &[1., 2., 3.]), (1, 50.));
-        assert_eq!(
-            scale.least_index_with_domain(100., &[1., 2., 3.]),
-            (2, 100.)
-        );
+        assert_eq!(scale.least_index_with_domain(100., &[1., 2., 3.]), (2, 100.));
     }
 }

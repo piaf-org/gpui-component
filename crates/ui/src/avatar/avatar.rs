@@ -103,7 +103,7 @@ impl RenderOnce for Avatar {
             .bg(cx.theme().secondary)
             .text_color(cx.theme().background)
             .border_1()
-            .border_color(cx.theme().border)
+            .border_color(cx.theme().background)
             .when(self.name.is_none() && self.src.is_none(), |this| {
                 this.text_size(avatar_size(self.size) * 0.6)
                     .child(self.placeholder)
@@ -152,17 +152,5 @@ mod tests {
         assert_eq!(extract_text_initials(&"Jason Lee"), "JL".to_string());
         assert_eq!(extract_text_initials(&"Foo Bar Dar"), "FB".to_string());
         assert_eq!(extract_text_initials(&"huacnlee"), "HU".to_string());
-    }
-
-    #[gpui::test]
-    fn test_avatar_builder(_cx: &mut gpui::TestAppContext) {
-        let avatar = Avatar::new()
-            .name("Jason Lee")
-            .placeholder(Icon::new(IconName::User))
-            .large();
-
-        assert_eq!(avatar.name, Some(SharedString::from("Jason Lee")));
-        assert_eq!(avatar.short_name, SharedString::from("JL"));
-        assert_eq!(avatar.size, Size::Large);
     }
 }

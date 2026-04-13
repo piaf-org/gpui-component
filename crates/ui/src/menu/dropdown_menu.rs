@@ -129,7 +129,7 @@ where
                             .detach();
 
                         menu.clone()
-                    }
+                    },
                 };
 
                 menu.clone()

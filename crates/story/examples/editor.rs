@@ -31,27 +31,6 @@ use lsp_types::{
     InsertReplaceEdit, InsertTextFormat, TextEdit, WorkspaceEdit,
 };
 
-enum Lang {
-    BuiltIn(Language),
-    External(&'static str),
-}
-
-impl Lang {
-    fn name(&self) -> &str {
-        match self {
-            Lang::BuiltIn(lang) => lang.name(),
-            Lang::External(lang) => lang,
-        }
-    }
-
-    fn from_str(s: &str) -> Self {
-        match s {
-            "nv" => Lang::External("navi"),
-            _ => Lang::BuiltIn(Language::from_str(s)),
-        }
-    }
-}
-
 fn init() {
     LanguageRegistry::singleton().register(
         "navi",
@@ -70,12 +49,10 @@ pub struct Example {
     editor: Entity<InputState>,
     tree_state: Entity<TreeState>,
     go_to_line_state: Entity<InputState>,
-    language: Lang,
+    language: Language,
     line_number: bool,
     indent_guides: bool,
     soft_wrap: bool,
-    show_whitespaces: bool,
-    folding: bool,
     lsp_store: ExampleLspStore,
     _subscriptions: Vec<Subscription>,
     _lint_task: Task<()>,
@@ -143,8 +120,8 @@ fn completion_item(
         kind: Some(lsp_types::CompletionItemKind::FUNCTION),
         text_edit: Some(CompletionTextEdit::InsertAndReplace(InsertReplaceEdit {
             new_text: replace_text.to_string(),
-            insert: *replace_range,
-            replace: *replace_range,
+            insert: replace_range.clone(),
+            replace: replace_range.clone(),
         })),
         documentation: Some(lsp_types::Documentation::String(documentation.to_string())),
         insert_text: None,
@@ -296,13 +273,13 @@ impl CodeActionProvider for ExampleLspStore {
             return Task::ready(Ok(()));
         };
 
-        let Some((_, text_edits)) = if let Some(changes) = edit.changes {
+        let changes = if let Some(changes) = edit.changes {
             changes
         } else {
             return Task::ready(Ok(()));
-        }
-        .into_iter()
-        .next() else {
+        };
+
+        let Some((_, text_edits)) = changes.into_iter().next() else {
             return Task::ready(Ok(()));
         };
 
@@ -464,6 +441,7 @@ impl CodeActionProvider for TextConvertor {
                         vec![TextEdit {
                             range,
                             new_text: old_text.to_uppercase(),
+                            ..Default::default()
                         }],
                     ))
                     .collect(),
@@ -481,8 +459,9 @@ impl CodeActionProvider for TextConvertor {
                     std::iter::once((
                         document_uri.clone(),
                         vec![TextEdit {
-                            range,
+                            range: range.clone(),
                             new_text: old_text.to_lowercase(),
+                            ..Default::default()
                         }],
                     ))
                     .collect(),
@@ -500,7 +479,7 @@ impl CodeActionProvider for TextConvertor {
                     std::iter::once((
                         document_uri.clone(),
                         vec![TextEdit {
-                            range,
+                            range: range.clone(),
                             new_text: old_text
                                 .split_whitespace()
                                 .map(|word| {
@@ -513,6 +492,7 @@ impl CodeActionProvider for TextConvertor {
                                 })
                                 .collect::<Vec<_>>()
                                 .join(" "),
+                            ..Default::default()
                         }],
                     ))
                     .collect(),
@@ -542,6 +522,7 @@ impl CodeActionProvider for TextConvertor {
                                     }
                                 })
                                 .collect(),
+                            ..Default::default()
                         }],
                     ))
                     .collect(),
@@ -576,6 +557,7 @@ impl CodeActionProvider for TextConvertor {
                                     }
                                 })
                                 .collect(),
+                            ..Default::default()
                         }],
                     ))
                     .collect(),
@@ -600,13 +582,13 @@ impl CodeActionProvider for TextConvertor {
             return Task::ready(Ok(()));
         };
 
-        let Some((_, text_edits)) = if let Some(changes) = edit.changes {
+        let changes = if let Some(changes) = edit.changes {
             changes
         } else {
             return Task::ready(Ok(()));
-        }
-        .into_iter()
-        .next() else {
+        };
+
+        let Some((_, text_edits)) = changes.into_iter().next() else {
             return Task::ready(Ok(()));
         };
 
@@ -688,12 +670,12 @@ fn build_file_items(ignorer: &Ignorer, root: &PathBuf, path: &PathBuf) -> Vec<Tr
 
 impl Example {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let default_language = Lang::BuiltIn(Language::Rust);
+        let default_language = Language::from_str("rust");
         let lsp_store = ExampleLspStore::new();
 
         let editor = cx.new(|cx| {
             let mut editor = InputState::new(window, cx)
-                .code_editor(default_language.name().to_string())
+                .code_editor(default_language.name())
                 .line_number(true)
                 .indent_guides(true)
                 .tab_size(TabSize {
@@ -713,14 +695,6 @@ impl Example {
 
             editor
         });
-
-        // Focus the editor on startup so that actions (e.g. Open) can bubble
-        // up through this view's element tree and reach their handlers.
-        let focus_handle = editor.focus_handle(cx);
-        window.defer(cx, move |window, cx| {
-            focus_handle.focus(window, cx);
-        });
-
         let go_to_line_state = cx.new(|cx| InputState::new(window, cx));
 
         let tree_state = cx.new(|cx| TreeState::new(cx));
@@ -738,8 +712,6 @@ impl Example {
             line_number: true,
             indent_guides: true,
             soft_wrap: false,
-            show_whitespaces: false,
-            folding: true,
             lsp_store,
             _subscriptions,
             _lint_task: Task::ready(()),
@@ -761,7 +733,7 @@ impl Example {
         let editor = self.editor.clone();
         let input_state = self.go_to_line_state.clone();
 
-        window.open_alert_dialog(cx, move |dialog, window, cx| {
+        window.open_dialog(cx, move |dialog, window, cx| {
             input_state.update(cx, |state, cx| {
                 let cursor_pos = editor.read(cx).cursor_position();
                 state.set_placeholder(
@@ -775,6 +747,7 @@ impl Example {
             dialog
                 .title("Go to line")
                 .child(Input::new(&input_state))
+                .confirm()
                 .on_ok({
                     let editor = editor.clone();
                     let input_state = input_state.clone();
@@ -836,6 +809,7 @@ impl Example {
                 let text_edit = TextEdit {
                     range: lsp_types::Range { start, end },
                     new_text: item.new.clone(),
+                    ..Default::default()
                 };
 
                 let edit = WorkspaceEdit {
@@ -894,14 +868,14 @@ impl Example {
             .extension()
             .and_then(|ext| ext.to_str())
             .unwrap_or_default();
-        let language = Lang::from_str(&language);
+        let language = Language::from_str(&language);
         let content = std::fs::read_to_string(&path)?;
 
         window
             .spawn(cx, async move |window| {
                 _ = view.update_in(window, |this, window, cx| {
                     _ = this.editor.update(cx, |this, cx| {
-                        this.set_highlighter(language.name().to_string(), cx);
+                        this.set_highlighter(language.name(), cx);
                         this.set_value(content, window, cx);
                     });
 
@@ -998,25 +972,6 @@ impl Example {
             }))
     }
 
-    fn render_show_whitespaces_button(
-        &self,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        Button::new("show-whitespace")
-            .ghost()
-            .xsmall()
-            .when(self.show_whitespaces, |this| this.icon(IconName::Check))
-            .label("Show Whitespaces")
-            .on_click(cx.listener(|this, _, window, cx| {
-                this.show_whitespaces = !this.show_whitespaces;
-                this.editor.update(cx, |state, cx| {
-                    state.set_show_whitespaces(this.show_whitespaces, window, cx);
-                });
-                cx.notify();
-            }))
-    }
-
     fn render_indent_guides_button(
         &self,
         _: &mut Window,
@@ -1031,21 +986,6 @@ impl Example {
                 this.indent_guides = !this.indent_guides;
                 this.editor.update(cx, |state, cx| {
                     state.set_indent_guides(this.indent_guides, window, cx);
-                });
-                cx.notify();
-            }))
-    }
-
-    fn render_folding_button(&self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        Button::new("folding")
-            .ghost()
-            .xsmall()
-            .when(self.folding, |this| this.icon(IconName::Check))
-            .label("Folding")
-            .on_click(cx.listener(|this, _, window, cx| {
-                this.folding = !this.folding;
-                this.editor.update(cx, |state, cx| {
-                    state.set_folding(this.folding, window, cx);
                 });
                 cx.notify();
             }))
@@ -1074,7 +1014,7 @@ impl Render for Example {
         if self.lsp_store.is_dirty() {
             let diagnostics = self.lsp_store.diagnostics();
             self.editor.update(cx, |state, cx| {
-                _ = state.diagnostics_mut().map(|set| {
+                state.diagnostics_mut().map(|set| {
                     set.clear();
                     set.extend(diagnostics);
                 });
@@ -1124,9 +1064,7 @@ impl Render for Example {
                                     .gap_3()
                                     .child(self.render_line_number_button(window, cx))
                                     .child(self.render_soft_wrap_button(window, cx))
-                                    .child(self.render_show_whitespaces_button(window, cx))
-                                    .child(self.render_indent_guides_button(window, cx))
-                                    .child(self.render_folding_button(window, cx)),
+                                    .child(self.render_indent_guides_button(window, cx)),
                             )
                             .child(self.render_go_to_line_button(window, cx)),
                     ),
@@ -1135,7 +1073,7 @@ impl Render for Example {
 }
 
 fn main() {
-    let app = gpui_platform::application().with_assets(Assets);
+    let app = Application::new().with_assets(Assets);
 
     app.run(move |cx| {
         gpui_component_story::init(cx);

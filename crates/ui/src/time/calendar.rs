@@ -96,7 +96,7 @@ impl Date {
             Self::Single(Some(date)) => Some(date.format(format).to_string().into()),
             Self::Range(Some(start), Some(end)) => {
                 Some(format!("{} - {}", start.format(format), end.format(format)).into())
-            }
+            },
             _ => None,
         }
     }
@@ -126,7 +126,7 @@ impl Date {
                 } else {
                     false
                 }
-            }
+            },
             _ => false,
         }
     }
@@ -247,12 +247,12 @@ impl Matcher {
                 let before_check = interval.before.map_or(false, |before| date < &before);
                 let after_check = interval.after.map_or(false, |after| date > &after);
                 before_check || after_check
-            }
+            },
             Matcher::Range(range) => {
                 let from_check = range.from.map_or(false, |from| date < &from);
                 let to_check = range.to.map_or(false, |to| date > &to);
                 !from_check && !to_check
-            }
+            },
             Matcher::Custom(f) => f(date),
         }
     }
@@ -340,12 +340,12 @@ impl CalendarState {
             Date::Single(Some(date)) => {
                 self.current_month = date.month() as u8;
                 self.current_year = date.year();
-            }
+            },
             Date::Range(Some(start), _) => {
                 self.current_month = start.month() as u8;
                 self.current_year = start.year();
-            }
-            _ => {}
+            },
+            _ => {},
         }
 
         cx.notify()
@@ -739,9 +739,9 @@ impl Calendar {
         h_flex()
             .id(id.into())
             .map(|this| match self.size {
-                Size::Small => this.size_7().rounded(cx.theme().radius / 2.),
+                Size::Small => this.size_7().rounded(cx.theme().radius),
                 Size::Large => this.size_10().rounded(cx.theme().radius * 2.),
-                _ => this.size_9().rounded(cx.theme().radius),
+                _ => this.size_9().rounded(cx.theme().radius * 2.),
             })
             .justify_center()
             .when(muted, |this| {
@@ -959,15 +959,9 @@ impl RenderOnce for Calendar {
             .child(self.render_header(window, cx))
             .child(
                 v_flex()
-                    .when(view_mode.is_day(), |this| {
-                        this.child(self.render_days(window, cx))
-                    })
-                    .when(view_mode.is_month(), |this| {
-                        this.child(self.render_months(window, cx))
-                    })
-                    .when(view_mode.is_year(), |this| {
-                        this.child(self.render_years(window, cx))
-                    }),
+                    .when(view_mode.is_day(), |this| this.child(self.render_days(window, cx)))
+                    .when(view_mode.is_month(), |this| this.child(self.render_months(window, cx)))
+                    .when(view_mode.is_year(), |this| this.child(self.render_years(window, cx))),
             )
     }
 }

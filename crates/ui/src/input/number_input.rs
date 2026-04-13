@@ -1,7 +1,7 @@
 use gpui::{
     AnyElement, App, Context, Corners, Edges, Entity, EventEmitter, FocusHandle, Focusable,
     InteractiveElement, IntoElement, KeyBinding, ParentElement, RenderOnce, SharedString,
-    StyleRefinement, Styled, TextAlign, Window, actions, prelude::FluentBuilder as _,
+    StyleRefinement, Styled, Window, actions, prelude::FluentBuilder as _,
 };
 
 use crate::{
@@ -151,7 +151,7 @@ impl RenderOnce for NumberInput {
             .flex_1()
             .rounded(cx.theme().radius)
             .refine_style(&self.style)
-            .when(self.disabled, |this| this.opacity(0.5))
+            .when(self.disabled, |this| this.bg(cx.theme().muted))
             .child(
                 Button::new("minus")
                     .outline()
@@ -187,7 +187,6 @@ impl RenderOnce for NumberInput {
                     .disabled(self.disabled)
                     .gap_0()
                     .rounded_none()
-                    .text_align(TextAlign::Center)
                     .when_some(self.prefix, |this, prefix| this.prefix(prefix))
                     .when_some(self.suffix, |this, suffix| this.suffix(suffix)),
             )

@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use gpui::{StyleRefinement, prelude::FluentBuilder, *};
 use gpui_component::{
-    ActiveTheme, Colorize as _, ElementExt, IconName, Sizable,
+    ActiveTheme, Colorize as _, IconName, Sizable,
     button::Button,
     checkbox::Checkbox,
     group_box::{GroupBox, GroupBoxVariants as _},
@@ -212,11 +212,18 @@ impl BrushStory {
             .on_mouse_down(MouseButton::Left, cx.listener(Self::handle_mouse_down))
             .on_mouse_move(cx.listener(Self::handle_mouse_move))
             .on_mouse_up(MouseButton::Left, cx.listener(Self::handle_mouse_up))
-            .on_prepaint(move |bounds, _window, cx| {
-                state_entity.update(cx, |state, _| {
-                    state.canvas_bounds = Some(bounds);
-                })
-            });
+            .child(
+                canvas(
+                    move |bounds, _, cx| {
+                        state_entity.update(cx, |state, _| {
+                            state.canvas_bounds = Some(bounds);
+                        })
+                    },
+                    |_, _, _, _| {},
+                )
+                .absolute()
+                .size_full(),
+            );
 
         base_div.child(
             canvas(
@@ -448,7 +455,7 @@ impl Render for Example {
 }
 
 fn main() {
-    let app = gpui_platform::application().with_assets(Assets);
+    let app = Application::new().with_assets(Assets);
 
     app.run(move |cx| {
         gpui_component_story::init(cx);

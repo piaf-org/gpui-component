@@ -139,15 +139,7 @@ impl StackPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.insert_panel_at(
-            panel,
-            self.panels_len(),
-            placement,
-            size,
-            dock_area,
-            window,
-            cx,
-        );
+        self.insert_panel_at(panel, self.panels_len(), placement, size, dock_area, window, cx);
     }
 
     /// Insert a panel at the index.
@@ -167,10 +159,10 @@ impl StackPanel {
         match placement {
             Placement::Top | Placement::Left => {
                 self.insert_panel_before(panel, ix, size, dock_area, window, cx)
-            }
+            },
             Placement::Right | Placement::Bottom => {
                 self.insert_panel_after(panel, ix, size, dock_area, window, cx)
-            }
+            },
         }
     }
 
@@ -229,9 +221,8 @@ impl StackPanel {
                 if let Ok(tab_panel) = panel.view().downcast::<TabPanel>() {
                     tab_panel.update(cx, |tab_panel, _| tab_panel.set_parent(view.downgrade()));
                 } else if let Ok(stack_panel) = panel.view().downcast::<Self>() {
-                    stack_panel.update(cx, |stack_panel, _| {
-                        stack_panel.parent = Some(view.downgrade())
-                    });
+                    stack_panel
+                        .update(cx, |stack_panel, _| stack_panel.parent = Some(view.downgrade()));
                 }
 
                 // Subscribe to the panel's layout change event.
@@ -257,7 +248,7 @@ impl StackPanel {
             None => {
                 let state = self.state.read(cx);
                 (state.container_size() / (state.sizes().len() + 1) as f32).max(PANEL_MIN_SIZE)
-            }
+            },
         };
 
         self.panels.insert(ix, panel.clone());

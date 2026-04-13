@@ -27,7 +27,6 @@ Context menus appear when right-clicking on an element:
 use gpui_component::menu::ContextMenuExt;
 
 div()
-    .id("my-element")
     .child("Right click me")
     .context_menu(|menu, window, cx| {
         menu.menu("Copy", Box::new(Copy))
@@ -333,7 +332,6 @@ menu.action_context(focus_handle)
 
 ```rust
 div()
-    .id("file-manager")
     .child("Right-click for options")
     .context_menu(|menu, window, cx| {
         menu.menu_with_icon("Open", IconName::FolderOpen, Box::new(Open))

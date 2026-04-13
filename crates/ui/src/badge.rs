@@ -1,9 +1,9 @@
 use gpui::{
-    div, prelude::FluentBuilder, px, relative, AnyElement, App, Hsla, IntoElement, ParentElement,
-    RenderOnce, StyleRefinement, Styled, Window,
+    AnyElement, App, Hsla, IntoElement, ParentElement, RenderOnce, StyleRefinement, Styled, Window,
+    div, prelude::FluentBuilder, px, relative,
 };
 
-use crate::{h_flex, white, ActiveTheme, Icon, Sizable, Size, StyledExt};
+use crate::{ActiveTheme, Icon, Sizable, Size, StyledExt, h_flex, white};
 
 #[derive(Default, Clone)]
 enum BadgeVariant {
@@ -138,7 +138,7 @@ impl RenderOnce for Badge {
                                     Size::Large => (px(2.), -px(count.len() as f32)),
                                     Size::Medium | Size::Size(_) => {
                                         (-px(3.), -px(3.) * count.len())
-                                    }
+                                    },
                                     Size::Small | Size::XSmall => (-px(4.), -px(4.) * count.len()),
                                 };
 
@@ -150,7 +150,7 @@ impl RenderOnce for Badge {
                                     .text_size(px(10.))
                                     .line_height(relative(1.))
                                     .child(count)
-                            }
+                            },
                             BadgeVariant::Icon(icon) => this
                                 .right_0()
                                 .bottom_0()

@@ -35,9 +35,7 @@ Popover::new("basic-popover")
 
 ### Popover with Custom Positioning
 
-The `anchor` method allows you to specify where the popover appears relative to the trigger element. It accepts both `Corner` and `Anchor` types.
-
-**Using `Corner` type** (4 corner positions):
+The `anchor` method allows you to specify where the popover appears relative to the trigger element, this anchor point can be one of the four corners: TopLeft, TopRight, BottomLeft, BottomRight.
 
 ```rust
 use gpui::Corner;
@@ -46,46 +44,6 @@ Popover::new("positioned-popover")
     .anchor(Corner::TopRight)
     .trigger(Button::new("top-right").label("Top Right").outline())
     .child("This popover appears at the top right")
-```
-
-**Using `Anchor` type** (6 positions including center):
-
-The `Anchor` type provides more positioning options, including center positions:
-
-```rust
-use gpui_component::Anchor;
-
-// Top positions
-Popover::new("top-left")
-    .anchor(Anchor::TopLeft)
-    .trigger(Button::new("btn").label("Top Left").outline())
-    .child("Anchored to top left")
-
-Popover::new("top-center")
-    .anchor(Anchor::TopCenter)
-    .trigger(Button::new("btn").label("Top Center").outline())
-    .child("Anchored to top center")
-
-Popover::new("top-right")
-    .anchor(Anchor::TopRight)
-    .trigger(Button::new("btn").label("Top Right").outline())
-    .child("Anchored to top right")
-
-// Bottom positions
-Popover::new("bottom-left")
-    .anchor(Anchor::BottomLeft)
-    .trigger(Button::new("btn").label("Bottom Left").outline())
-    .child("Anchored to bottom left")
-
-Popover::new("bottom-center")
-    .anchor(Anchor::BottomCenter)
-    .trigger(Button::new("btn").label("Bottom Center").outline())
-    .child("Anchored to bottom center")
-
-Popover::new("bottom-right")
-    .anchor(Anchor::BottomRight)
-    .trigger(Button::new("btn").label("Bottom Right").outline())
-    .child("Anchored to bottom right")
 ```
 
 ### View in Popover
