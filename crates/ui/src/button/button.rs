@@ -460,8 +460,9 @@ impl RenderOnce for Button {
             .flex_shrink_0()
             .items_center()
             .justify_center()
-            .cursor_default()
-            .when(self.variant.is_link(), |this| this.cursor_pointer())
+            .when(clickable || (self.variant.is_link() && !is_disabled), |this| {
+                this.cursor_pointer()
+            })
             .when(cx.theme().shadow && normal_style.shadow, |this| {
                 this.shadow_xs()
             })
