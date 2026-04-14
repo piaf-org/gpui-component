@@ -93,6 +93,7 @@ actions!(
 pub enum InputEvent {
     Change,
     PressEnter { secondary: bool },
+    PressEscape,
     Focus,
     Blur,
 }
@@ -1186,6 +1187,8 @@ impl InputState {
         if self.ime_marked_range.is_some() {
             self.unmark_text(window, cx);
         }
+
+        cx.emit(InputEvent::PressEscape);
 
         if self.clean_on_escape {
             return self.clean(window, cx);
