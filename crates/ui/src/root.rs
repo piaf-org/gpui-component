@@ -1,14 +1,15 @@
 use crate::{
+    ActiveTheme, Placement,
     dialog::Dialog,
     input::InputState,
     notification::{Notification, NotificationList},
     sheet::Sheet,
-    window_border, ActiveTheme, Placement,
+    window_border,
 };
 use gpui::{
-    actions, canvas, div, prelude::FluentBuilder as _, AnyView, App, AppContext, Context,
-    DefiniteLength, Entity, FocusHandle, Hsla, InteractiveElement, IntoElement, KeyBinding,
-    ParentElement as _, Render, Styled, Window,
+    AnyView, App, AppContext, Context, DefiniteLength, Entity, FocusHandle, Hsla,
+    InteractiveElement, IntoElement, KeyBinding, ParentElement as _, Render, Styled, Window,
+    actions, canvas, div, prelude::FluentBuilder as _,
 };
 use std::{any::TypeId, rc::Rc};
 
@@ -84,7 +85,7 @@ impl WindowExt for Window {
     where
         F: Fn(Sheet, &mut Window, &mut App) -> Sheet + 'static,
     {
-        let _ = Root::try_update(self, cx, move |root, window, cx| {
+        Root::update(self, cx, move |root, window, cx| {
             if root.active_sheet.is_none() {
                 root.previous_focus_handle = window.focused(cx);
             }
@@ -98,27 +99,27 @@ impl WindowExt for Window {
                 builder: Rc::new(build),
             });
             cx.notify();
-        });
+        })
     }
 
     fn has_active_sheet(&mut self, cx: &mut App) -> bool {
-        Root::try_read(self, cx).is_some_and(|root| root.active_sheet.is_some())
+        Root::read(self, cx).active_sheet.is_some()
     }
 
     fn close_sheet(&mut self, cx: &mut App) {
-        let _ = Root::try_update(self, cx, |root, window, cx| {
+        Root::update(self, cx, |root, window, cx| {
             root.focused_input = None;
             root.active_sheet = None;
             root.focus_back(window, cx);
             cx.notify();
-        });
+        })
     }
 
     fn open_dialog<F>(&mut self, cx: &mut App, build: F)
     where
         F: Fn(Dialog, &mut Window, &mut App) -> Dialog + 'static,
     {
-        let _ = Root::try_update(self, cx, move |root, window, cx| {
+        Root::update(self, cx, move |root, window, cx| {
             // Only save focus handle if there are no active dialogs.
             // This is used to restore focus when all dialogs are closed.
             if root.active_dialogs.len() == 0 {
@@ -133,15 +134,15 @@ impl WindowExt for Window {
                 builder: Rc::new(build),
             });
             cx.notify();
-        });
+        })
     }
 
     fn has_active_dialog(&mut self, cx: &mut App) -> bool {
-        Root::try_read(self, cx).is_some_and(|root| !root.active_dialogs.is_empty())
+        Root::read(self, cx).active_dialogs.len() > 0
     }
 
     fn close_dialog(&mut self, cx: &mut App) {
-        let _ = Root::try_update(self, cx, move |root, window, cx| {
+        Root::update(self, cx, move |root, window, cx| {
             root.focused_input = None;
             root.active_dialogs.pop();
 
@@ -153,60 +154,56 @@ impl WindowExt for Window {
                 root.focus_back(window, cx);
             }
             cx.notify();
-        });
+        })
     }
 
     fn close_all_dialogs(&mut self, cx: &mut App) {
-        let _ = Root::try_update(self, cx, |root, window, cx| {
+        Root::update(self, cx, |root, window, cx| {
             root.focused_input = None;
             root.active_dialogs.clear();
             root.focus_back(window, cx);
             cx.notify();
-        });
+        })
     }
 
     fn push_notification(&mut self, note: impl Into<Notification>, cx: &mut App) {
         let note = note.into();
-        let _ = Root::try_update(self, cx, move |root, window, cx| {
+        Root::update(self, cx, move |root, window, cx| {
             root.notification
                 .update(cx, |view, cx| view.push(note, window, cx));
             cx.notify();
-        });
+        })
     }
 
     fn remove_notification<T: Sized + 'static>(&mut self, cx: &mut App) {
-        let _ = Root::try_update(self, cx, move |root, window, cx| {
+        Root::update(self, cx, move |root, window, cx| {
             root.notification.update(cx, |view, cx| {
                 let id = TypeId::of::<T>();
                 view.close(id, window, cx);
             });
             cx.notify();
-        });
+        })
     }
 
     fn clear_notifications(&mut self, cx: &mut App) {
-        let _ = Root::try_update(self, cx, move |root, window, cx| {
+        Root::update(self, cx, move |root, window, cx| {
             root.notification
                 .update(cx, |view, cx| view.clear(window, cx));
             cx.notify();
-        });
+        })
     }
 
     fn notifications(&mut self, cx: &mut App) -> Rc<Vec<Entity<Notification>>> {
-        Root::try_read(self, cx)
-            .map(|root| {
-                let entity = root.notification.clone();
-                Rc::new(entity.read(cx).notifications())
-            })
-            .unwrap_or_else(|| Rc::new(Vec::new()))
+        let entity = Root::read(self, cx).notification.clone();
+        Rc::new(entity.read(cx).notifications())
     }
 
     fn has_focused_input(&mut self, cx: &mut App) -> bool {
-        Root::try_read(self, cx).is_some_and(|root| root.focused_input.is_some())
+        Root::read(self, cx).focused_input.is_some()
     }
 
     fn focused_input(&mut self, cx: &mut App) -> Option<Entity<InputState>> {
-        Root::try_read(self, cx).and_then(|root| root.focused_input.clone())
+        Root::read(self, cx).focused_input.clone()
     }
 }
 
@@ -275,24 +272,12 @@ impl Root {
         root.update(cx, |root, cx| f(root, window, cx))
     }
 
-    pub fn try_update<F, R>(window: &mut Window, cx: &mut App, f: F) -> Option<R>
-    where
-        F: FnOnce(&mut Self, &mut Window, &mut Context<Self>) -> R,
-    {
-        let root = window.root::<Root>().flatten()?;
-        Some(root.update(cx, |root, cx| f(root, window, cx)))
-    }
-
     pub fn read<'a>(window: &'a Window, cx: &'a App) -> &'a Self {
         &window
             .root::<Root>()
             .expect("The window root view should be of type `ui::Root`.")
             .unwrap()
             .read(cx)
-    }
-
-    pub fn try_read<'a>(window: &'a Window, cx: &'a App) -> Option<&'a Self> {
-        window.root::<Root>().flatten().map(|root| root.read(cx))
     }
 
     fn focus_back(&mut self, window: &mut Window, cx: &mut App) {
