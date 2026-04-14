@@ -7,9 +7,9 @@ use crate::{
     window_border,
 };
 use gpui::{
-    AnyView, App, AppContext, Context, DefiniteLength, Entity, FocusHandle, InteractiveElement,
-    IntoElement, KeyBinding, ParentElement as _, Render, Styled, Window, actions, canvas, div,
-    prelude::FluentBuilder as _,
+    AnyView, App, AppContext, Context, DefiniteLength, Entity, FocusHandle, Hsla,
+    InteractiveElement, IntoElement, KeyBinding, ParentElement as _, Render, Styled, Window,
+    actions, canvas, div, prelude::FluentBuilder as _,
 };
 use std::{any::TypeId, rc::Rc};
 
@@ -219,6 +219,7 @@ pub struct Root {
     pub(super) focused_input: Option<Entity<InputState>>,
     pub notification: Entity<NotificationList>,
     sheet_size: Option<DefiniteLength>,
+    window_background: Option<Hsla>,
     view: AnyView,
 }
 
@@ -245,8 +246,18 @@ impl Root {
             focused_input: None,
             notification: cx.new(|cx| NotificationList::new(window, cx)),
             sheet_size: None,
+            window_background: None,
             view: view.into(),
         }
+    }
+
+    /// Override the window-filling background painted by the root shell.
+    ///
+    /// Transparent or glass windows can use this to let the app content
+    /// define its own surfaces instead of forcing `theme.background`.
+    pub fn window_background(mut self, color: Hsla) -> Self {
+        self.window_background = Some(color);
+        self
     }
 
     pub fn update<F, R>(window: &mut Window, cx: &mut App, f: F) -> R
@@ -396,6 +407,7 @@ impl Root {
 impl Render for Root {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         window.set_rem_size(cx.theme().font_size);
+        let window_background = self.window_background.unwrap_or(cx.theme().background);
 
         window_border().child(
             div()
@@ -406,7 +418,7 @@ impl Render for Root {
                 .relative()
                 .size_full()
                 .font_family(cx.theme().font_family.clone())
-                .bg(cx.theme().background)
+                .bg(window_background)
                 .text_color(cx.theme().foreground)
                 .child(self.view.clone()),
         )
