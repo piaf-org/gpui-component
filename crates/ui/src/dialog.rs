@@ -1,21 +1,20 @@
 use std::{rc::Rc, time::Duration};
 
 use gpui::{
-    Animation, AnimationExt as _, AnyElement, App, Bounds, BoxShadow, ClickEvent, Div, Edges,
-    FocusHandle, Hsla, InteractiveElement, IntoElement, KeyBinding, MouseButton, ParentElement,
-    Pixels, Point, RenderOnce, SharedString, StyleRefinement, Styled, Window, anchored, div, hsla,
-    point, prelude::FluentBuilder, px, relative,
+    anchored, div, hsla, point, prelude::FluentBuilder, px, relative, Animation, AnimationExt as _,
+    AnyElement, App, Bounds, BoxShadow, ClickEvent, Div, Edges, FocusHandle, Hsla,
+    InteractiveElement, IntoElement, KeyBinding, MouseButton, ParentElement, Pixels, Point,
+    RenderOnce, SharedString, StyleRefinement, Styled, Window,
 };
 use rust_i18n::t;
 
 use crate::{
-    ActiveTheme as _, IconName, Root, Sizable as _, StyledExt, WindowExt as _,
     actions::{Cancel, Confirm},
     animation::cubic_bezier,
     button::{Button, ButtonVariant, ButtonVariants as _},
     h_flex,
     scroll::ScrollableElement as _,
-    v_flex,
+    v_flex, ActiveTheme as _, IconName, Root, Sizable as _, StyledExt, WindowExt as _,
 };
 
 const CONTEXT: &str = "Dialog";
@@ -396,10 +395,14 @@ impl RenderOnce for Dialog {
                     .occlude()
                     .w(view_size.width)
                     .h(view_size.height)
-                    .when(self.overlay_visible, |this| this.bg(overlay_color(self.overlay, cx)))
+                    .when(self.overlay_visible, |this| {
+                        this.bg(overlay_color(self.overlay, cx))
+                    })
                     .when(self.overlay, |this| {
                         // Only the last dialog owns the `mouse down - close dialog` event.
-                        if (self.layer_ix + 1) != Root::read(window, cx).active_dialogs.len() {
+                        let active_dialogs =
+                            Root::try_read(window, cx).map_or(0, |root| root.active_dialogs.len());
+                        if (self.layer_ix + 1) != active_dialogs {
                             return this;
                         }
 

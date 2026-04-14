@@ -1,20 +1,20 @@
 use std::{ops::Range, rc::Rc};
 
 use gpui::{
-    App, Bounds, Corners, Element, ElementId, ElementInputHandler, Entity, GlobalElementId, Half,
-    HighlightStyle, Hitbox, Hsla, IntoElement, LayoutId, MouseButton, MouseMoveEvent, Path, Pixels,
-    Point, ShapedLine, SharedString, Size, Style, TextAlign, TextRun, TextStyle, UnderlineStyle,
-    Window, fill, point, px, relative, size,
+    fill, point, px, relative, size, App, Bounds, Corners, Element, ElementId, ElementInputHandler,
+    Entity, GlobalElementId, Half, HighlightStyle, Hitbox, Hsla, IntoElement, LayoutId,
+    MouseButton, MouseMoveEvent, Path, Pixels, Point, ShapedLine, SharedString, Size, Style,
+    TextAlign, TextRun, TextStyle, UnderlineStyle, Window,
 };
 use ropey::Rope;
 use smallvec::SmallVec;
 
 use crate::{
+    input::{blink_cursor::CURSOR_WIDTH, text_wrapper::LineLayout, RopeExt as _},
     ActiveTheme as _, Colorize, PixelsExt, Root,
-    input::{RopeExt as _, blink_cursor::CURSOR_WIDTH, text_wrapper::LineLayout},
 };
 
-use super::{InputState, LastLayout, mode::InputMode};
+use super::{mode::InputMode, InputState, LastLayout};
 
 const BOTTOM_MARGIN_ROWS: usize = 3;
 pub(super) const RIGHT_MARGIN: Pixels = px(10.);
@@ -746,7 +746,9 @@ impl TextElement {
 
         let (highlighter, diagnostics) = match &state.mode {
             InputMode::CodeEditor {
-                highlighter, diagnostics, ..
+                highlighter,
+                diagnostics,
+                ..
             } => (highlighter.borrow(), diagnostics),
             _ => return None,
         };
@@ -855,7 +857,11 @@ fn print_points_as_svg_path(
     }
 
     if points.len() > 0 {
-        println!("M{},{}", points[0].x.as_f32() as i32, points[0].y.as_f32() as i32);
+        println!(
+            "M{},{}",
+            points[0].x.as_f32() as i32,
+            points[0].y.as_f32() as i32
+        );
         for p in points.iter().skip(1) {
             println!("L{},{}", p.x.as_f32() as i32, p.y.as_f32() as i32);
         }
@@ -948,9 +954,15 @@ impl Element for TextElement {
         let mut bounds = bounds;
 
         let (display_text, text_color) = if is_empty {
-            (&Rope::from(placeholder.as_str()), cx.theme().muted_foreground)
+            (
+                &Rope::from(placeholder.as_str()),
+                cx.theme().muted_foreground,
+            )
         } else if state.masked {
-            (&Rope::from("*".repeat(text.chars().count())), cx.theme().foreground)
+            (
+                &Rope::from("*".repeat(text.chars().count())),
+                cx.theme().foreground,
+            )
         } else {
             (&text, cx.theme().foreground)
         };
@@ -1253,8 +1265,10 @@ impl Element for TextElement {
         // Set Root focused_input when self is focused
         if focused {
             let state = self.state.clone();
-            if Root::read(window, cx).focused_input.as_ref() != Some(&state) {
-                Root::update(window, cx, |root, _, cx| {
+            if Root::try_read(window, cx)
+                .is_some_and(|root| root.focused_input.as_ref() != Some(&state))
+            {
+                let _ = Root::try_update(window, cx, |root, _, cx| {
                     root.focused_input = Some(state);
                     cx.notify();
                 });
@@ -1265,8 +1279,11 @@ impl Element for TextElement {
         window.on_next_frame({
             let state = self.state.clone();
             move |window, cx| {
-                if !focused && Root::read(window, cx).focused_input.as_ref() == Some(&state) {
-                    Root::update(window, cx, |root, _, cx| {
+                if !focused
+                    && Root::try_read(window, cx)
+                        .is_some_and(|root| root.focused_input.as_ref() == Some(&state))
+                {
+                    let _ = Root::try_update(window, cx, |root, _, cx| {
                         root.focused_input = None;
                         cx.notify();
                     });
@@ -1355,7 +1372,10 @@ impl Element for TextElement {
 
         for (ix, line) in prepaint.last_layout.lines.iter().enumerate() {
             let row = visible_range.start + ix;
-            let p = point(origin.x + prepaint.last_layout.line_number_width, origin.y + offset_y);
+            let p = point(
+                origin.x + prepaint.last_layout.line_number_width,
+                origin.y + offset_y,
+            );
 
             // Paint the actual line
             _ = line.paint(p, line_height, window, cx);
@@ -1595,15 +1615,30 @@ mod tests {
         // use hello this-is-test
         let runs = vec![
             // use
-            TextRun { len: 3, ..run.clone() },
+            TextRun {
+                len: 3,
+                ..run.clone()
+            },
             // \s
-            TextRun { len: 1, ..run.clone() },
+            TextRun {
+                len: 1,
+                ..run.clone()
+            },
             // hello
-            TextRun { len: 5, ..run.clone() },
+            TextRun {
+                len: 5,
+                ..run.clone()
+            },
             // \s
-            TextRun { len: 1, ..run.clone() },
+            TextRun {
+                len: 1,
+                ..run.clone()
+            },
             // this-is-test
-            TextRun { len: 12, ..run.clone() },
+            TextRun {
+                len: 12,
+                ..run.clone()
+            },
         ];
 
         #[track_caller]
@@ -1636,14 +1671,26 @@ mod tests {
         };
 
         let runs = vec![
-            TextRun { len: 5, ..run.clone() },
-            TextRun { len: 7, ..run.clone() },
-            TextRun { len: 24, ..run.clone() },
+            TextRun {
+                len: 5,
+                ..run.clone()
+            },
+            TextRun {
+                len: 7,
+                ..run.clone()
+            },
+            TextRun {
+                len: 24,
+                ..run.clone()
+            },
         ];
 
         let bg_segments = vec![(8..12, gpui::red()), (12..18, gpui::blue())];
         let result = split_runs_by_bg_segments(5, &runs, &bg_segments);
-        assert_eq!(result.iter().map(|run| run.len).collect::<Vec<_>>(), vec![3, 2, 2, 5, 1, 23]);
+        assert_eq!(
+            result.iter().map(|run| run.len).collect::<Vec<_>>(),
+            vec![3, 2, 2, 5, 1, 23]
+        );
         assert_eq!(result[0].color, gpui::blue());
         assert_eq!(result[1].color, gpui::black());
         assert_eq!(result[2].color, gpui::black());

@@ -4,11 +4,11 @@
 //! https://github.com/zed-industries/zed/blob/main/crates/gpui/examples/input.rs
 use anyhow::Result;
 use gpui::{
-    Action, App, AppContext, Bounds, ClipboardItem, Context, Entity, EntityInputHandler,
-    EventEmitter, FocusHandle, Focusable, InteractiveElement as _, IntoElement, KeyBinding,
-    KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement as _,
-    Pixels, Point, Render, ScrollHandle, ScrollWheelEvent, SharedString, Styled as _, Subscription,
-    Task, UTF16Selection, Window, actions, div, point, prelude::FluentBuilder as _, px,
+    actions, div, point, prelude::FluentBuilder as _, px, Action, App, AppContext, Bounds,
+    ClipboardItem, Context, Entity, EntityInputHandler, EventEmitter, FocusHandle, Focusable,
+    InteractiveElement as _, IntoElement, KeyBinding, KeyDownEvent, MouseButton, MouseDownEvent,
+    MouseMoveEvent, MouseUpEvent, ParentElement as _, Pixels, Point, Render, ScrollHandle,
+    ScrollWheelEvent, SharedString, Styled as _, Subscription, Task, UTF16Selection, Window,
 };
 use ropey::{Rope, RopeSlice};
 use serde::Deserialize;
@@ -21,19 +21,19 @@ use super::{
     blink_cursor::BlinkCursor, change::Change, element::TextElement, mask_pattern::MaskPattern,
     mode::InputMode, number_input, text_wrapper::TextWrapper,
 };
-use crate::Size;
 use crate::actions::{SelectDown, SelectLeft, SelectRight, SelectUp};
 use crate::input::movement::MoveDirection;
 use crate::input::{
-    HoverDefinition, Lsp, Position,
     element::RIGHT_MARGIN,
     popovers::{ContextMenu, DiagnosticPopover, HoverPopover, MouseContextMenu},
     search::{self, SearchPanel},
     text_wrapper::LineLayout,
+    HoverDefinition, Lsp, Position,
 };
 use crate::input::{InlineCompletion, RopeExt as _, Selection};
-use crate::{Root, history::History};
+use crate::Size;
 use crate::{highlighter::DiagnosticSet, input::text_wrapper::LineItem};
+use crate::{history::History, Root};
 
 #[derive(Action, Clone, PartialEq, Eq, Deserialize)]
 #[action(namespace = input, no_json)]
@@ -497,13 +497,15 @@ impl InputState {
         match &mut self.mode {
             InputMode::PlainText { rows: r, .. } | InputMode::CodeEditor { rows: r, .. } => {
                 *r = rows
-            },
+            }
             InputMode::AutoGrow {
-                max_rows: max_r, rows: r, ..
+                max_rows: max_r,
+                rows: r,
+                ..
             } => {
                 *r = rows;
                 *max_r = rows;
-            },
+            }
         }
         self
     }
@@ -516,12 +518,14 @@ impl InputState {
     ) {
         match &mut self.mode {
             InputMode::CodeEditor {
-                language, highlighter, ..
+                language,
+                highlighter,
+                ..
             } => {
                 *language = new_language.into();
                 *highlighter.borrow_mut() = None;
-            },
-            _ => {},
+            }
+            _ => {}
         }
         cx.notify();
     }
@@ -530,8 +534,8 @@ impl InputState {
         match &mut self.mode {
             InputMode::CodeEditor { highlighter, .. } => {
                 *highlighter.borrow_mut() = None;
-            },
-            _ => {},
+            }
+            _ => {}
         }
         cx.notify();
     }
@@ -1717,7 +1721,7 @@ impl InputState {
         self.blink_cursor.update(cx, |cursor, cx| {
             cursor.stop(cx);
         });
-        Root::update(window, cx, |root, _, _| {
+        let _ = Root::try_update(window, cx, |root, _, _| {
             root.focused_input = None;
         });
         cx.emit(InputEvent::Blur);
