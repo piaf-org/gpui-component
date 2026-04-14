@@ -93,13 +93,22 @@ impl RenderOnce for Switch {
         let on_click = self.on_click.clone();
         let toggle_state = window.use_keyed_state(self.id.clone(), cx, |_, _| checked);
 
+        let checked_bg = if cx.theme().is_dark() {
+            cx.theme().switch.blend(cx.theme().primary.opacity(0.72))
+        } else {
+            cx.theme().primary.blend(cx.theme().switch.opacity(0.18))
+        };
+
         let (bg, toggle_bg) = match checked {
-            true => (cx.theme().primary, cx.theme().switch_thumb),
+            true => (checked_bg, cx.theme().switch_thumb),
             false => (cx.theme().switch, cx.theme().switch_thumb),
         };
 
         let (bg, toggle_bg) = if self.disabled {
-            (if checked { bg.alpha(0.5) } else { bg }, toggle_bg.alpha(0.35))
+            (
+                if checked { bg.alpha(0.5) } else { bg },
+                toggle_bg.alpha(0.35),
+            )
         } else {
             (bg, toggle_bg)
         };
@@ -147,7 +156,7 @@ impl RenderOnce for Switch {
                             div()
                                 .rounded(radius)
                                 .bg(toggle_bg)
-                                .shadow_md()
+                                .when(cx.theme().shadow && !checked, |this| this.shadow_sm())
                                 .size(bar_width)
                                 .map(|this| {
                                     let prev_checked = toggle_state.read(cx);
